@@ -38,9 +38,13 @@ app.use(cors({
 // Placeholder for DB access
 const getDB = () => env.DB;
 
+// Geoapify API key (provided by user)
+const GEOAPIFY_KEY = env.GEOAPIFY_API_KEY || 'c1352d073f8944cf81539e9eae311c4d';
+
 // Simple in-memory cache for API calls
 const placesCache = new Map();
 const weatherCache = new Map();
+const geocodeCache = new Map();
 
 // Helper: Haversine distance in kilometers
 function calculateDistance(lat1, lon1, lat2, lon2) {
@@ -58,43 +62,22 @@ function calculateDistance(lat1, lon1, lat2, lon2) {
   return parseFloat((R * c).toFixed(1));
 }
 
-// Known cities dictionary with accurate coordinates
-const KNOWN_CITIES = {
-  jaipur: { name: 'Jaipur', state: 'Rajasthan', country: 'India', lat: 26.9124, lon: 75.7873 },
-  delhi: { name: 'Delhi', state: 'Delhi', country: 'India', lat: 28.6139, lon: 77.2090 },
-  kurukshetra: { name: 'Kurukshetra', state: 'Haryana', country: 'India', lat: 29.9695, lon: 76.8783 },
-  mumbai: { name: 'Mumbai', state: 'Maharashtra', country: 'India', lat: 19.0760, lon: 72.8777 },
-  agra: { name: 'Agra', state: 'Uttar Pradesh', country: 'India', lat: 27.1767, lon: 78.0081 },
-  varanasi: { name: 'Varanasi', state: 'Uttar Pradesh', country: 'India', lat: 25.3176, lon: 82.9739 },
-  nyc: { name: 'New York City', state: 'New York', country: 'United States', lat: 40.71427, lon: -74.00597 },
-  'new york': { name: 'New York City', state: 'New York', country: 'United States', lat: 40.71427, lon: -74.00597 },
-  paris: { name: 'Paris', state: 'Île-de-France', country: 'France', lat: 48.8566, lon: 2.3522 },
-  rome: { name: 'Rome', state: 'Lazio', country: 'Italy', lat: 41.9028, lon: 12.4964 },
-  tokyo: { name: 'Tokyo', state: 'Tokyo', country: 'Japan', lat: 35.6762, lon: 139.6503 },
-  kyoto: { name: 'Kyoto', state: 'Kyoto', country: 'Japan', lat: 35.0116, lon: 135.7681 },
-  london: { name: 'London', state: 'England', country: 'United Kingdom', lat: 51.5074, lon: -0.1278 },
-  barcelona: { name: 'Barcelona', state: 'Catalonia', country: 'Spain', lat: 41.3851, lon: 2.1734 }
-};
+// Helper: Extract destination location name from any natural language query
+function extractLocationFromQuery(q = '') {
+  const text = q.trim();
 
-// Helper: Extract city from query string (e.g. "forts in jaipur" -> "jaipur")
-function extractCityFromQuery(q = '') {
-  const text = q.toLowerCase();
-  for (const key of Object.keys(KNOWN_CITIES)) {
-    // Word boundary check for city name
-    const reg = new RegExp(`\\b${key}\\b`, 'i');
-    if (reg.test(text)) {
-      return KNOWN_CITIES[key];
-    }
-  }
-
-  // Regex pattern for "in <city>", "near <city>", "around <city>"
-  const match = text.match(/\b(?:in|near|around|visit|explore|see)\s+([a-zA-Z\s]+)/i);
+  // Pattern: "in <place>", "near <place>", "around <place>", "visit <place>", "see <place>", "at <place>"
+  const match = text.match(/\b(?:in|near|around|visit|explore|see|at|of)\s+([a-zA-Z\s.-]+)/i);
   if (match && match[1]) {
-    const raw = match[1].trim();
-    if (KNOWN_CITIES[raw]) return KNOWN_CITIES[raw];
-    return { name: raw.charAt(0).toUpperCase() + raw.slice(1), lat: null, lon: null };
+    return match[1].trim();
   }
-  return null;
+
+  // Strip generic travel phrases to find the core place name
+  const stripped = text
+    .replace(/\b(best|top|famous|tourist|attractions?|things\s+to\s+do|places\s+to\s+visit|sights?|points?\s+of\s+interest|museums?|forts?|castles?|monuments?|temples?|parks?|viewpoints?)\b/gi, '')
+    .trim();
+
+  return stripped || text;
 }
 
 // Helper: Parse natural language travel query for category intent
@@ -117,495 +100,162 @@ function detectCategoryFromQuery(query = '') {
 function getGeoapifyCategories(categoryKey) {
   switch (categoryKey) {
     case 'museums':
-      return 'entertainment.museum';
+      return 'entertainment.museum,tourism.sights.museum';
     case 'monuments':
-      return 'building.historic,tourism.sights';
+      return 'building.historic,tourism.sights.monument,heritage';
     case 'temples':
       return 'building.place_of_worship';
     case 'forts':
-      return 'building.historic,tourism.sights';
+      return 'building.historic,tourism.sights.castle,tourism.sights';
     case 'viewpoints':
       return 'tourism.attraction.viewpoint';
     case 'parks':
-      return 'leisure.park';
+      return 'leisure.park,national_park';
     case 'historic':
       return 'heritage,building.historic';
     case 'landmarks':
       return 'tourism.sights,building.historic';
     case 'all':
     default:
-      return 'tourism.sights';
+      return 'tourism.sights,tourism.attraction';
   }
 }
 
-// Curated backup dataset for key problem statement demo cities
-// Ensures flawless presentation if API key is unset or external API is rate-limited
-const CURATED_CITIES_DATA = {
-  jaipur: [
-    {
-      id: 'jai-1',
-      name: 'Amer Fort (Amber Palace)',
-      category: 'forts',
-      categoryLabel: 'UNESCO Hilltop Fort',
-      address: 'Devisinghpura, Amer, Jaipur, Rajasthan 302001',
-      lat: 26.9855,
-      lon: 75.8513,
-      description: 'Opulent UNESCO World Heritage 16th-century fortress crafted from yellow and pink sandstone with white marble, famed for the glittering Sheesh Mahal (Mirror Palace) and Maota Lake reflection.',
-      rating: 4.9,
-      recommendedTime: 'Morning',
-      suggestedHours: '3.0 hrs',
-      image: 'https://images.unsplash.com/photo-1599661046289-e31897846e41?w=600&auto=format&fit=crop&q=80',
-      highlights: ['Sheesh Mahal (Hall of Mirrors)', 'Maota Lake vista', 'Ganesh Pol entrance gate']
-    },
-    {
-      id: 'jai-2',
-      name: 'Nahargarh Fort',
-      category: 'forts',
-      categoryLabel: 'Aravalli Ridge Fortress',
-      address: 'Krishna Nagar, Brahampuri, Jaipur, Rajasthan 302002',
-      lat: 26.9378,
-      lon: 75.8156,
-      description: 'Historic hilltop fort perched on the edge of the Aravalli hills, offering breathtaking panoramic sunset vistas over the entire Pink City and Madhavendra Bhawan 12 royal suites.',
-      rating: 4.8,
-      recommendedTime: 'Evening',
-      suggestedHours: '2.0 hrs',
-      image: 'https://images.unsplash.com/photo-1609137144813-7d9921338f24?w=600&auto=format&fit=crop&q=80',
-      highlights: ['Panoramic Jaipur sunset view', 'Madhavendra Bhawan 12 suites', 'Historic stepwell (Baori)']
-    },
-    {
-      id: 'jai-3',
-      name: 'Jaigarh Fort',
-      category: 'forts',
-      categoryLabel: 'Military Citadel & Armory',
-      address: 'Devisinghpura, Amer, Jaipur, Rajasthan 302028',
-      lat: 26.9847,
-      lon: 75.8458,
-      description: 'Imposing victory fortress built in 1726 to protect Amer Fort, home to the legendary Jaivana cannon—the worlds largest cannon on wheels—and ancient subterranean armories.',
-      rating: 4.7,
-      recommendedTime: 'Afternoon',
-      suggestedHours: '2.0 hrs',
-      image: 'https://images.unsplash.com/photo-1599661046289-e31897846e41?w=600&auto=format&fit=crop&q=80',
-      highlights: ['Jaivana Cannon on wheels', 'Subterranean escape tunnels to Amer', 'Diwa Burj watchtower']
-    },
-    {
-      id: 'jai-4',
-      name: 'Hawa Mahal (Palace of Winds)',
-      category: 'monuments',
-      categoryLabel: 'Iconic Pink Sandstone Palace',
-      address: 'Hawa Mahal Rd, Badi Choupad, J.D.A. Market, Jaipur 302002',
-      lat: 26.9239,
-      lon: 75.8267,
-      description: 'Five-story pink and red sandstone marvel constructed in 1799 with 953 honeycomb jharokha windows allowing royal women to observe street festivals undetected.',
-      rating: 4.8,
-      recommendedTime: 'Morning',
-      suggestedHours: '1.5 hrs',
-      image: 'https://images.unsplash.com/photo-1477587458883-47145ed94245?w=600&auto=format&fit=crop&q=80',
-      highlights: ['953 latticed casement windows', 'Wind circulation cooling architecture', 'Rooftop street view']
-    },
-    {
-      id: 'jai-5',
-      name: 'City Palace & Chandra Mahal',
-      category: 'historic',
-      categoryLabel: 'Royal Residence & Museum',
-      address: 'Gangori Bazaar, J.D.A. Market, Pink City, Jaipur 302002',
-      lat: 26.9258,
-      lon: 75.8237,
-      description: 'Magnificent royal complex blending Rajasthani and Mughal architectural styles, featuring the Peacock Courtyard, Chandra Mahal, and Mubarak Mahal textile museum.',
-      rating: 4.8,
-      recommendedTime: 'Afternoon',
-      suggestedHours: '2.5 hrs',
-      image: 'https://images.unsplash.com/photo-1524492412937-b28074a5d7da?w=600&auto=format&fit=crop&q=80',
-      highlights: ['Pritam Niwas Chowk (Peacock Gate)', 'Chandra Mahal royal suites', 'Sterling silver Gangajali urns']
-    },
-    {
-      id: 'jai-6',
-      name: 'Jal Mahal (Water Palace)',
-      category: 'viewpoints',
-      categoryLabel: 'Scenic Floating Palace',
-      address: 'Amer Rd, Jal Mahal, Amber, Jaipur, Rajasthan 302002',
-      lat: 26.9535,
-      lon: 75.8462,
-      description: 'Sublime architectural jewel set in the middle of the Man Sagar lake, framed by the picturesque Aravalli mountain range.',
-      rating: 4.6,
-      recommendedTime: 'Evening',
-      suggestedHours: '1.0 hr',
-      image: 'https://images.unsplash.com/photo-1609137144813-7d9921338f24?w=600&auto=format&fit=crop&q=80',
-      highlights: ['Man Sagar Lake promenade', 'Illuminated evening reflection', 'Migratory bird watching']
+// Dynamic Geocoder: Finds real GPS coordinates for ANY place on earth via Geoapify Geocoding API
+async function geocodeLocation(locName) {
+  if (!locName || locName.trim() === '') return null;
+  const key = locName.toLowerCase().trim();
+  if (geocodeCache.has(key)) return geocodeCache.get(key);
+
+  try {
+    const url = `https://api.geoapify.com/v1/geocode/search?text=${encodeURIComponent(
+      locName
+    )}&apiKey=${GEOAPIFY_KEY}&limit=1`;
+
+    const res = await fetch(url);
+    if (res.ok) {
+      const data = await res.json();
+      const f = data.features?.[0];
+      if (f && f.properties) {
+        const props = f.properties;
+        const city = props.city || props.name || locName;
+        const country = props.country || '';
+        const lat = props.lat;
+        const lon = props.lon;
+
+        const result = { city, country, lat, lon };
+        geocodeCache.set(key, result);
+        return result;
+      }
     }
-  ],
-  nyc: [
-    {
-      id: 'nyc-1',
-      name: 'Statue of Liberty & Ellis Island',
-      category: 'monuments',
-      categoryLabel: 'Iconic Monument',
-      address: 'Liberty Island, New York, NY 10004',
-      lat: 40.6892,
-      lon: -74.0445,
-      description: 'Iconic colossal neoclassical sculpture symbolizing freedom and American democracy in New York Harbor.',
-      rating: 4.8,
-      recommendedTime: 'Morning',
-      suggestedHours: '2.5 hrs',
-      image: 'https://images.unsplash.com/photo-1503572327579-b5c6afe5c5c5?w=600&auto=format&fit=crop&q=80',
-      highlights: ['Harbor ferry ride', 'Pedestal observation', 'Immigration Museum']
-    },
-    {
-      id: 'nyc-2',
-      name: 'Central Park',
-      category: 'parks',
-      categoryLabel: 'Urban Park & Oasis',
-      address: 'Central Park, New York, NY',
-      lat: 40.785091,
-      lon: -73.968285,
-      description: 'An 843-acre urban masterpiece featuring lakes, bridges, walking trails, and iconic filming locations.',
-      rating: 4.9,
-      recommendedTime: 'Afternoon',
-      suggestedHours: '2.0 hrs',
-      image: 'https://images.unsplash.com/photo-1538688525198-9b88f6f53126?w=600&auto=format&fit=crop&q=80',
-      highlights: ['Bethesda Terrace', 'Bow Bridge', 'Great Lawn']
-    },
-    {
-      id: 'nyc-3',
-      name: 'The Metropolitan Museum of Art (The Met)',
-      category: 'museums',
-      categoryLabel: 'World-Class Museum',
-      address: '1000 5th Ave, New York, NY 10028',
-      lat: 40.779437,
-      lon: -73.963244,
-      description: 'Over 5,000 years of global art, from ancient Egyptian temples to master paintings and armor.',
-      rating: 4.9,
-      recommendedTime: 'Morning',
-      suggestedHours: '3.0 hrs',
-      image: 'https://images.unsplash.com/photo-1582555172866-f73bb12a2ab3?w=600&auto=format&fit=crop&q=80',
-      highlights: ['Temple of Dendur', 'European Masters', 'Rooftop Garden']
-    },
-    {
-      id: 'nyc-4',
-      name: 'Empire State Building & Observation Deck',
-      category: 'viewpoints',
-      categoryLabel: 'Panoramic Viewpoint',
-      address: '20 W 34th St., New York, NY 10001',
-      lat: 40.748817,
-      lon: -73.985428,
-      description: 'Art Deco skyscraper soaring 102 stories with unmatched 360-degree views across Manhattan.',
-      rating: 4.7,
-      recommendedTime: 'Evening',
-      suggestedHours: '1.5 hrs',
-      image: 'https://images.unsplash.com/photo-1546436836-07a91091f160?w=600&auto=format&fit=crop&q=80',
-      highlights: ['86th floor open-air observatory', '102nd top deck', 'Art Deco lobby']
-    },
-    {
-      id: 'nyc-5',
-      name: 'Brooklyn Bridge',
-      category: 'landmarks',
-      categoryLabel: 'Historic Suspension Bridge',
-      address: 'Brooklyn Bridge, New York, NY 10038',
-      lat: 40.706086,
-      lon: -73.996864,
-      description: 'Architectural marvel opened in 1883 with elevated pedestrian walkway offering sweeping skyline vistas.',
-      rating: 4.8,
-      recommendedTime: 'Evening',
-      suggestedHours: '1.0 hr',
-      image: 'https://images.unsplash.com/photo-1502899576159-f224dcce5e93?w=600&auto=format&fit=crop&q=80',
-      highlights: ['Gothic stone arches', 'East River panorama', 'Sunset walk']
-    },
-    {
-      id: 'nyc-6',
-      name: 'Times Square & Broadway',
-      category: 'landmarks',
-      categoryLabel: 'Entertainment Hub',
-      address: 'Broadway & 7th Ave, New York, NY 10036',
-      lat: 40.758896,
-      lon: -73.985130,
-      description: 'The bustling crossroads of the world illuminated by massive neon billboards and theater marquee lights.',
-      rating: 4.6,
-      recommendedTime: 'Evening',
-      suggestedHours: '1.0 hr',
-      image: 'https://images.unsplash.com/photo-1509299349698-dd22323b5963?w=600&auto=format&fit=crop&q=80',
-      highlights: ['TKTS Red Steps', 'Broadway theaters', 'Midnight light show']
+  } catch (err) {
+    console.warn('Geoapify geocoding warning:', err.message);
+  }
+
+  // Fallback to OpenStreetMap Nominatim if Geoapify fails
+  try {
+    const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(locName)}&format=json&limit=1`;
+    const res = await fetch(url, { headers: { 'User-Agent': 'TourismExplorerHyperDart/1.0' } });
+    if (res.ok) {
+      const data = await res.json();
+      if (Array.isArray(data) && data[0]) {
+        const item = data[0];
+        const displayParts = (item.display_name || '').split(',');
+        const city = displayParts[0].trim();
+        const country = displayParts[displayParts.length - 1].trim();
+
+        const result = {
+          city,
+          country,
+          lat: parseFloat(item.lat),
+          lon: parseFloat(item.lon)
+        };
+        geocodeCache.set(key, result);
+        return result;
+      }
     }
-  ],
-  paris: [
-    {
-      id: 'par-1',
-      name: 'Eiffel Tower',
-      category: 'landmarks',
-      categoryLabel: 'Architectural Landmark',
-      address: 'Champ de Mars, 5 Av. Anatole France, 75007 Paris',
-      lat: 48.85837,
-      lon: 2.294481,
-      description: 'Wrought-iron lattice tower on the Champ de Mars, the defining symbol of Paris and romantic architecture.',
-      rating: 4.8,
-      recommendedTime: 'Evening',
-      suggestedHours: '2.0 hrs',
-      image: 'https://images.unsplash.com/photo-1511739001486-6bfe10ce785f?w=600&auto=format&fit=crop&q=80',
-      highlights: ['Summit panoramic view', 'Champ de Mars gardens', 'Hourly sparkle illumination']
-    },
-    {
-      id: 'par-2',
-      name: 'Louvre Museum',
-      category: 'museums',
-      categoryLabel: 'World Famous Museum',
-      address: 'Rue de Rivoli, 75001 Paris',
-      lat: 48.860611,
-      lon: 2.337644,
-      description: 'The worlds most visited art museum, home to Leonardo da Vincis Mona Lisa and the Venus de Milo.',
-      rating: 4.9,
-      recommendedTime: 'Morning',
-      suggestedHours: '3.5 hrs',
-      image: 'https://images.unsplash.com/photo-1565099824688-e93eb20fe527?w=600&auto=format&fit=crop&q=80',
-      highlights: ['Mona Lisa', 'Winged Victory of Samothrace', 'Glass Pyramid courtyard']
-    },
-    {
-      id: 'par-3',
-      name: 'Cathédrale Notre-Dame de Paris',
-      category: 'historic',
-      categoryLabel: 'Medieval Cathedral',
-      address: '6 Parvis Notre-Dame - Pl. Jean-Paul II, 75004 Paris',
-      lat: 48.852968,
-      lon: 2.349902,
-      description: 'Masterpiece of French Gothic architecture on Île de la Cité renowned for its flying buttresses and rose windows.',
-      rating: 4.8,
-      recommendedTime: 'Afternoon',
-      suggestedHours: '1.5 hrs',
-      image: 'https://images.unsplash.com/photo-1549144511-f099e773c147?w=600&auto=format&fit=crop&q=80',
-      highlights: ['Gothic facade', 'Rose windows', 'Île de la Cité riverside promenade']
-    },
-    {
-      id: 'par-4',
-      name: 'Arc de Triomphe',
-      category: 'monuments',
-      categoryLabel: 'Triumphal Arch & Viewpoint',
-      address: 'Pl. Charles de Gaulle, 75008 Paris',
-      lat: 48.873792,
-      lon: 2.295028,
-      description: 'Grand triumphal monument honoring those who fought for France, topped with a rooftop viewing platform over 12 radiating avenues.',
-      rating: 4.7,
-      recommendedTime: 'Afternoon',
-      suggestedHours: '1.0 hr',
-      image: 'https://images.unsplash.com/photo-1509356843151-3e7d96241e11?w=600&auto=format&fit=crop&q=80',
-      highlights: ['Tomb of the Unknown Soldier', 'Rooftop viewing terrace', 'Champs-Élysées vista']
+  } catch (e) {}
+
+  return null;
+}
+
+// Dynamic Wikipedia Web Discovery: Extracts real landmark details, descriptions, and photos
+async function fetchWikipediaAttractions(query, city, category, lat, lon) {
+  const queryStr = `${category !== 'all' ? category : 'tourist attractions'} in ${city}`;
+
+  try {
+    const wikiSearchUrl = `https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch=${encodeURIComponent(
+      queryStr
+    )}&format=json&origin=*&srlimit=8`;
+
+    const searchRes = await fetch(wikiSearchUrl, {
+      headers: { 'User-Agent': 'TourismExplorerHyperDart/1.0 (contact@hyperdart.com)' }
+    });
+
+    if (searchRes.ok) {
+      const searchData = await searchRes.json();
+      const hits = (searchData.query?.search || []).filter((h) => {
+        const t = h.title.toLowerCase();
+        return (
+          !t.startsWith('list of') &&
+          !t.includes('disambiguation') &&
+          !t.includes('history of') &&
+          !t.includes('geography of') &&
+          !t.includes('demographics of') &&
+          t !== city.toLowerCase()
+        );
+      });
+
+      const details = await Promise.all(
+        hits.slice(0, 6).map(async (hit, idx) => {
+          try {
+            const summaryUrl = `https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(
+              hit.title
+            )}`;
+            const sRes = await fetch(summaryUrl, {
+              headers: { 'User-Agent': 'TourismExplorerHyperDart/1.0' }
+            });
+
+            if (!sRes.ok) return null;
+            const s = await sRes.json();
+            if (s.type === 'disambiguation') return null;
+
+            const pLat = s.coordinates?.lat != null ? s.coordinates.lat : lat + (idx % 2 === 0 ? 0.007 * (idx + 1) : -0.006 * (idx + 1));
+            const pLon = s.coordinates?.lon != null ? s.coordinates.lon : lon + (idx % 2 === 0 ? -0.006 * (idx + 1) : 0.007 * (idx + 1));
+
+            return {
+              id: `wiki-${s.pageid || idx}`,
+              name: s.title,
+              category: category !== 'all' ? category : 'sights',
+              categoryLabel: s.description || `${category !== 'all' ? category.slice(0, -1) : 'Sight'} & Landmark`,
+              address: `${s.title}, ${city}`,
+              lat: pLat,
+              lon: pLon,
+              description: s.extract || hit.snippet.replace(/<[^>]+>/g, '') || `Prime cultural point of interest in ${city}.`,
+              rating: parseFloat((4.7 + ((idx % 3) * 0.1)).toFixed(1)),
+              recommendedTime: idx % 3 === 0 ? 'Morning' : idx % 3 === 1 ? 'Afternoon' : 'Evening',
+              suggestedHours: idx % 2 === 0 ? '2.5 hrs' : '1.5 hrs',
+              image: s.thumbnail?.source || null,
+              highlights: [
+                s.description ? s.description.split(' in ')[0] : 'Historic Site',
+                'Must-Visit Landmark',
+                'Iconic Photo Spot'
+              ]
+            };
+          } catch (e) {
+            return null;
+          }
+        })
+      );
+
+      return details.filter(Boolean);
     }
-  ],
-  rome: [
-    {
-      id: 'rom-1',
-      name: 'Colosseum',
-      category: 'historic',
-      categoryLabel: 'Ancient Amphitheatre',
-      address: 'Piazza del Colosseo, 1, 00184 Roma RM, Italy',
-      lat: 41.89021,
-      lon: 12.492231,
-      description: 'The largest ancient amphitheatre ever built, hosting gladiatorial contests and ancient spectacles for centuries.',
-      rating: 4.9,
-      recommendedTime: 'Morning',
-      suggestedHours: '2.5 hrs',
-      image: 'https://images.unsplash.com/photo-1552832230-c0197dd311b5?w=600&auto=format&fit=crop&q=80',
-      highlights: ['Arena floor', 'Underground hypogeum', 'Outer stone tiers']
-    },
-    {
-      id: 'rom-2',
-      name: 'Pantheon',
-      category: 'temples',
-      categoryLabel: 'Ancient Temple & Basilica',
-      address: 'Piazza della Rotonda, 00186 Roma RM, Italy',
-      lat: 41.898611,
-      lon: 12.476873,
-      description: 'Former Roman temple with the worlds largest unreinforced concrete dome and famous open oculus.',
-      rating: 4.8,
-      recommendedTime: 'Afternoon',
-      suggestedHours: '1.0 hr',
-      image: 'https://images.unsplash.com/photo-1542820229-081e0c12af0b?w=600&auto=format&fit=crop&q=80',
-      highlights: ['Open central oculus', 'Raphaels tomb', 'Piazza della Rotonda fountain']
-    },
-    {
-      id: 'rom-3',
-      name: 'Trevi Fountain',
-      category: 'monuments',
-      categoryLabel: 'Baroque Monument',
-      address: 'Piazza di Trevi, 00187 Roma RM, Italy',
-      lat: 41.900932,
-      lon: 12.483313,
-      description: 'One of the most famous fountains in the world, standing 26.3 meters high with carved travertine sculptures.',
-      rating: 4.8,
-      recommendedTime: 'Evening',
-      suggestedHours: '45 mins',
-      image: 'https://images.unsplash.com/photo-1525874684015-58379d421a52?w=600&auto=format&fit=crop&q=80',
-      highlights: ['Oceanus statue', 'Coin-tossing tradition', 'Night illumination']
-    }
-  ],
-  delhi: [
-    {
-      id: 'del-1',
-      name: 'National Museum, New Delhi',
-      category: 'museums',
-      categoryLabel: 'Premier National Museum',
-      address: 'Janpath, Connaught Place, New Delhi 110001',
-      lat: 28.6118,
-      lon: 77.2193,
-      description: 'India premier cultural institution holding over 200,000 works of art spanning 5,000 years of civilization.',
-      rating: 4.7,
-      recommendedTime: 'Morning',
-      suggestedHours: '3.0 hrs',
-      image: 'https://images.unsplash.com/photo-1587474260584-136574528ed5?w=600&auto=format&fit=crop&q=80',
-      highlights: ['Harappan Dancing Girl', 'Buddhist relics gallery', 'Miniature paintings']
-    },
-    {
-      id: 'del-2',
-      name: 'National Gallery of Modern Art (NGMA)',
-      category: 'museums',
-      categoryLabel: 'Modern Art Gallery',
-      address: 'Jaipur House, Shershah Rd, India Gate, New Delhi 110003',
-      lat: 28.6096,
-      lon: 77.2346,
-      description: 'Housed in the historic Jaipur House palace, showcasing premier modern Indian art and sculptures.',
-      rating: 4.6,
-      recommendedTime: 'Afternoon',
-      suggestedHours: '2.0 hrs',
-      image: 'https://images.unsplash.com/photo-1579783902614-a3fb3927b675?w=600&auto=format&fit=crop&q=80',
-      highlights: ['Amrita Sher-Gil collection', 'Sculpture garden', 'Historic Jaipur House']
-    },
-    {
-      id: 'del-3',
-      name: 'National Crafts Museum & Hastkala Academy',
-      category: 'museums',
-      categoryLabel: 'Folk Heritage Museum',
-      address: 'Bhairon Marg, Pragati Maidan, New Delhi 110001',
-      lat: 28.6148,
-      lon: 77.2435,
-      description: 'Open-air village complex celebrating Indian tribal and traditional crafts, handlooms, and live artisans.',
-      rating: 4.7,
-      recommendedTime: 'Afternoon',
-      suggestedHours: '2.0 hrs',
-      image: 'https://images.unsplash.com/photo-1607604276583-eef5d076aa5f?w=600&auto=format&fit=crop&q=80',
-      highlights: ['Live master craft demonstrations', 'Courtyard architecture', 'Tribal textile gallery']
-    },
-    {
-      id: 'del-4',
-      name: 'National Science Centre',
-      category: 'museums',
-      categoryLabel: 'Interactive Science Museum',
-      address: 'Near Gate No. 1, Bhairon Road, Pragati Maidan, New Delhi 110001',
-      lat: 28.6133,
-      lon: 77.2458,
-      description: 'Interactive science wonderland with life-size prehistoric animal galleries and hands-on physics demonstrations.',
-      rating: 4.5,
-      recommendedTime: 'Morning',
-      suggestedHours: '2.5 hrs',
-      image: 'https://images.unsplash.com/photo-1507668077129-56e32842fceb?w=600&auto=format&fit=crop&q=80',
-      highlights: ['Dinosaur gallery', 'Energy ball machine', 'Hands-on tech exhibits']
-    }
-  ],
-  kurukshetra: [
-    {
-      id: 'kru-1',
-      name: 'Brahma Sarovar',
-      category: 'historic',
-      categoryLabel: 'Sacred Water Reservoir & Sights',
-      address: 'Thanesar, Kurukshetra, Haryana 136118',
-      lat: 29.9622,
-      lon: 76.8338,
-      description: 'Massive sacred water body mentioned in ancient epics, featuring grand ghats, bronze chariot sculpture, and serene walking tracks.',
-      rating: 4.8,
-      recommendedTime: 'Evening',
-      suggestedHours: '2.0 hrs',
-      image: 'https://images.unsplash.com/photo-1544717305-2782549b5136?w=600&auto=format&fit=crop&q=80',
-      highlights: ['Gigantic bronze chariot of Krishna & Arjuna', 'Ghats promenade', 'Evening Aarti']
-    },
-    {
-      id: 'kru-2',
-      name: 'Jyotisar Birthplace of Bhagavad Gita',
-      category: 'historic',
-      categoryLabel: 'Spiritual Monument & Tree',
-      address: 'Jyotisar, Pehowa Road, Kurukshetra 136118',
-      lat: 29.9678,
-      lon: 76.7645,
-      description: 'Revered historical site marked by an ancient banyan tree where the eternal philosophy of Bhagavad Gita was delivered.',
-      rating: 4.7,
-      recommendedTime: 'Morning',
-      suggestedHours: '1.5 hrs',
-      image: 'https://images.unsplash.com/photo-1582510003544-4d00b7f74220?w=600&auto=format&fit=crop&q=80',
-      highlights: ['Ancient Kalpavriksha banyan tree', 'Sound and light show', 'Marble Krishna chariot']
-    },
-    {
-      id: 'kru-3',
-      name: 'Kurukshetra Panorama and Science Centre',
-      category: 'museums',
-      categoryLabel: 'Interactive Museum & Panorama',
-      address: 'Near Theme Park, Kurukshetra 136118',
-      lat: 29.9664,
-      lon: 76.8458,
-      description: 'Unique cylindrical centre housing a massive 3D Mahabharata war panorama with lighting and sound effects.',
-      rating: 4.6,
-      recommendedTime: 'Afternoon',
-      suggestedHours: '2.0 hrs',
-      image: 'https://images.unsplash.com/photo-1566127444979-b3d2b654e3d7?w=600&auto=format&fit=crop&q=80',
-      highlights: ['360-degree Mahabharata war diorama', 'Science park', 'Ancient Indian science gallery']
-    },
-    {
-      id: 'kru-4',
-      name: 'Sheikh Chilli Tomb',
-      category: 'monuments',
-      categoryLabel: 'Mughal Architectural Monument',
-      address: 'Thanesar, Kurukshetra, Haryana 136118',
-      lat: 29.9806,
-      lon: 76.8228,
-      description: 'Stunning Mughal-era complex with octagonal white marble tomb surrounded by lush gardens and an ASI museum.',
-      rating: 4.6,
-      recommendedTime: 'Afternoon',
-      suggestedHours: '1.5 hrs',
-      image: 'https://images.unsplash.com/photo-1564507592333-c60657eea523?w=600&auto=format&fit=crop&q=80',
-      highlights: ['Buff sandstone and marble dome', 'Mughal garden arches', 'Archaeological museum']
-    }
-  ],
-  tokyo: [
-    {
-      id: 'tyo-1',
-      name: 'Senso-ji Temple',
-      category: 'temples',
-      categoryLabel: 'Ancient Buddhist Temple',
-      address: '2 Chome-3-1 Asakusa, Taito City, Tokyo 111-0032',
-      lat: 35.714765,
-      lon: 139.796655,
-      description: 'Tokyo oldest and most significant ancient Buddhist temple founded in 645 AD, approached via the vibrant Nakamise shopping street.',
-      rating: 4.8,
-      recommendedTime: 'Morning',
-      suggestedHours: '2.0 hrs',
-      image: 'https://images.unsplash.com/photo-1503899036084-c55cdd92da26?w=600&auto=format&fit=crop&q=80',
-      highlights: ['Kaminarimon Thunder Gate with giant red lantern', 'Five-story pagoda', 'Incense hall']
-    },
-    {
-      id: 'tyo-2',
-      name: 'Tokyo Skytree',
-      category: 'viewpoints',
-      categoryLabel: 'Tallest Observation Tower',
-      address: '1 Chome-1-2 Oshiage, Sumida City, Tokyo 131-0045',
-      lat: 35.710063,
-      lon: 139.8107,
-      description: 'Soaring 634-meter broadcasting tower offering the highest panoramic view of Tokyo and Mount Fuji on clear days.',
-      rating: 4.7,
-      recommendedTime: 'Evening',
-      suggestedHours: '2.0 hrs',
-      image: 'https://images.unsplash.com/photo-1540959733332-eab4deabeeaf?w=600&auto=format&fit=crop&q=80',
-      highlights: ['350m Tembo Deck', '450m Tembo Galleria spiral corridor', 'Glass floor look-down']
-    },
-    {
-      id: 'tyo-3',
-      name: 'Meiji Jingu Shrine & Forest',
-      category: 'temples',
-      categoryLabel: 'Shinto Shrine & Woodland',
-      address: '1-1 Yoyogikamizonocho, Shibuya City, Tokyo 151-8557',
-      lat: 35.676398,
-      lon: 139.699326,
-      description: 'Peaceful Shinto shrine surrounded by a tranquil 170-acre forest of 120,000 trees in the heart of Shibuya.',
-      rating: 4.8,
-      recommendedTime: 'Morning',
-      suggestedHours: '1.5 hrs',
-      image: 'https://images.unsplash.com/photo-1578637387939-43c525550085?w=600&auto=format&fit=crop&q=80',
-      highlights: ['Giant cypress Torii gate', 'Sake barrel offerings wall', 'Forest walking path']
-    }
-  ]
-};
+  } catch (err) {
+    console.warn('Wikipedia attraction discovery warning:', err.message);
+  }
+
+  return [];
+}
 
 // Route: Basic Health / Test
 app.get('/api/message', (req, res) => {
@@ -618,141 +268,132 @@ app.get('/api/hello/:name', (req, res) => {
   res.json({ message: `Hello, ${req.params.name} from Tourism Explorer (${environment})` });
 });
 
-// Primary Route: Fetch Attractions & Points of Interest
+// Primary Route: Fully Automated Tourist Attractions & Sights Endpoint
 app.get('/api/places', async (req, res) => {
   try {
+    const rawQuery = (req.query.query || '').trim();
     let lat = req.query.lat ? parseFloat(req.query.lat) : null;
     let lon = req.query.lon ? parseFloat(req.query.lon) : null;
-    const query = req.query.query || '';
-    let city = req.query.city || '';
-    let country = req.query.country || '';
+    let city = (req.query.city || '').trim();
+    let country = (req.query.country || '').trim();
     const requestedCategory = req.query.category || null;
     const userLat = req.query.userLat ? parseFloat(req.query.userLat) : null;
     const userLon = req.query.userLon ? parseFloat(req.query.userLon) : null;
     const radius = req.query.radius ? parseInt(req.query.radius, 10) : 10000;
 
-    // Detect category intent from query
-    const detectedCategory = requestedCategory || detectCategoryFromQuery(query);
+    // 1. Detect Category Intent from Query (e.g. "forts in jaipur" -> "forts")
+    const detectedCategory = requestedCategory || detectCategoryFromQuery(rawQuery);
     const geoapifyCategory = getGeoapifyCategories(detectedCategory);
 
-    // INTELLIGENT CITY RESOLVER:
-    // If query mentions another city (e.g. "forts in jaipur" when sandbox default was NYC),
-    // automatically detect and resolve coordinates for that city!
-    const queryCity = extractCityFromQuery(query);
-    if (queryCity && queryCity.name) {
-      const qCityLower = queryCity.name.toLowerCase();
-      const currentCityLower = city.toLowerCase();
+    // 2. Extract Destination from Query (e.g. "forts in jaipur" -> "jaipur", "castles in edinburgh" -> "edinburgh")
+    const extractedLocation = extractLocationFromQuery(rawQuery);
 
-      // If the query specifically targets a different city, override coordinates & city
-      if (!currentCityLower.includes(qCityLower) || lat == null || lon == null) {
-        city = queryCity.name;
-        if (queryCity.lat != null && queryCity.lon != null) {
-          lat = queryCity.lat;
-          lon = queryCity.lon;
-        }
-        if (queryCity.country) {
-          country = queryCity.country;
-        }
+    // If query specifies a destination and it doesn't match current city, or coordinates are default/missing:
+    const cityNeedsGeocode =
+      !city ||
+      city.toLowerCase() === 'new york city' ||
+      (extractedLocation && !city.toLowerCase().includes(extractedLocation.toLowerCase()));
+
+    if (cityNeedsGeocode && extractedLocation) {
+      const geoResult = await geocodeLocation(extractedLocation);
+      if (geoResult) {
+        city = geoResult.city;
+        country = geoResult.country;
+        lat = geoResult.lat;
+        lon = geoResult.lon;
+      } else {
+        city = extractedLocation.charAt(0).toUpperCase() + extractedLocation.slice(1);
       }
     }
 
-    // Cache key
-    const cacheKey = `${lat?.toFixed(3)}_${lon?.toFixed(3)}_${detectedCategory}_${city.toLowerCase()}`;
+    if (!city) city = 'Destination';
+    if (lat == null || lon == null) {
+      lat = 26.9154;
+      lon = 75.8189;
+    }
+
+    // Cache check
+    const cacheKey = `${lat.toFixed(3)}_${lon.toFixed(3)}_${detectedCategory}_${city.toLowerCase()}`;
     if (placesCache.has(cacheKey)) {
       return res.json(placesCache.get(cacheKey));
     }
 
-    const apiKey = env.GEOAPIFY_API_KEY || '';
     let places = [];
 
-    // 1. Try Geoapify API if API key exists and coordinates are provided
-    if (apiKey && lat != null && lon != null) {
-      try {
+    // 3. Parallel Execution: Geoapify Places API + Wikipedia Web Discovery
+    const [geoapifyRes, wikiPlaces] = await Promise.allSettled([
+      // A. Query Geoapify Places API
+      (async () => {
         const geoapifyUrl = `https://api.geoapify.com/v2/places?categories=${encodeURIComponent(
           geoapifyCategory
-        )}&filter=circle:${lon},${lat},${radius}&limit=20&apiKey=${apiKey}`;
+        )}&filter=circle:${lon},${lat},${radius}&limit=20&apiKey=${GEOAPIFY_KEY}`;
 
         const apiResponse = await fetch(geoapifyUrl);
-        if (apiResponse.ok) {
-          const data = await apiResponse.json();
-          if (Array.isArray(data.features)) {
-            places = data.features
-              .map((feature, idx) => {
-                const props = feature.properties || {};
-                const pLat = props.lat;
-                const pLon = props.lon;
+        if (!apiResponse.ok) return [];
+        const data = await apiResponse.json();
+        if (!Array.isArray(data.features)) return [];
 
-                // Negative filter: exclude restaurants, cafes, supermarkets, general shops
-                const cats = props.categories || [];
-                const isRestaurant = cats.some((c) => c.startsWith('catering.restaurant') || c.startsWith('catering.fast_food'));
-                const isCommercial = cats.some((c) => c.startsWith('commercial.shopping') || c.startsWith('commercial.supermarket'));
-                if (isRestaurant || isCommercial) return null;
+        return data.features
+          .map((feature, idx) => {
+            const props = feature.properties || {};
+            const pLat = props.lat;
+            const pLon = props.lon;
 
-                const distFromCenter = calculateDistance(lat, lon, pLat, pLon);
-                const distFromUser = calculateDistance(userLat, userLon, pLat, pLon);
+            // Strict negative filter: eliminate restaurants, fast food, shopping malls, supermarkets
+            const cats = props.categories || [];
+            const isRestaurant = cats.some((c) => c.startsWith('catering.restaurant') || c.startsWith('catering.fast_food'));
+            const isCommercial = cats.some((c) => c.startsWith('commercial.shopping') || c.startsWith('commercial.supermarket'));
+            if (isRestaurant || isCommercial) return null;
 
-                return {
-                  id: props.place_id || `geo-${idx}`,
-                  name: props.name || props.street || `Attraction #${idx + 1}`,
-                  category: detectedCategory !== 'all' ? detectedCategory : 'sights',
-                  categoryLabel: props.datasource?.raw?.tourism || props.category || 'Sight & Landmark',
-                  address: props.formatted || props.address_line2 || props.city || `${city} Area`,
-                  lat: pLat,
-                  lon: pLon,
-                  distanceKm: distFromCenter,
-                  distanceFromUserKm: distFromUser,
-                  description: props.datasource?.raw?.description || props.details || `Key point of interest near ${city}.`,
-                  rating: 4.5 + ((idx % 5) * 0.1),
-                  recommendedTime: idx % 3 === 0 ? 'Morning' : idx % 3 === 1 ? 'Afternoon' : 'Evening',
-                  suggestedHours: idx % 2 === 0 ? '2.0 hrs' : '1.5 hrs',
-                  website: props.datasource?.raw?.website || props.contact?.website || null,
-                  highlights: [props.datasource?.raw?.heritage ? 'Heritage Site' : 'Sightseeing', 'Photo Spot', 'Nearby Landmark']
-                };
-              })
-              .filter(Boolean);
-          }
-        }
-      } catch (err) {
-        console.warn('Geoapify call issue, falling back cleanly:', err.message);
+            const name = props.name || props.street;
+            if (!name) return null;
+
+            return {
+              id: props.place_id || `geo-${idx}`,
+              name,
+              category: detectedCategory !== 'all' ? detectedCategory : 'sights',
+              categoryLabel: props.datasource?.raw?.tourism || props.category || 'Sight & Landmark',
+              address: props.formatted || props.address_line2 || `${city} Area`,
+              lat: pLat,
+              lon: pLon,
+              description: props.datasource?.raw?.description || props.details || `Key point of interest in ${city}.`,
+              rating: parseFloat((4.5 + ((idx % 5) * 0.1)).toFixed(1)),
+              recommendedTime: idx % 3 === 0 ? 'Morning' : idx % 3 === 1 ? 'Afternoon' : 'Evening',
+              suggestedHours: idx % 2 === 0 ? '2.0 hrs' : '1.5 hrs',
+              website: props.datasource?.raw?.website || props.contact?.website || null,
+              highlights: [props.datasource?.raw?.heritage ? 'Heritage Site' : 'Sightseeing', 'Photo Spot', 'Nearby Landmark']
+            };
+          })
+          .filter(Boolean);
+      })(),
+
+      // B. Query Wikipedia Web Discovery in parallel
+      fetchWikipediaAttractions(rawQuery, city, detectedCategory, lat, lon)
+    ]);
+
+    const geoPlaces = geoapifyRes.status === 'fulfilled' ? geoapifyRes.value : [];
+    const wikiItems = wikiPlaces.status === 'fulfilled' ? wikiPlaces.value : [];
+
+    // Prioritize named Wikipedia cultural attractions first, followed by Geoapify POIs
+    const combinedMap = new Map();
+
+    wikiItems.forEach((w) => {
+      combinedMap.set(w.name.toLowerCase(), w);
+    });
+
+    geoPlaces.forEach((g) => {
+      const key = g.name.toLowerCase();
+      if (!combinedMap.has(key)) {
+        combinedMap.set(key, g);
       }
-    }
+    });
 
-    // 2. If places is empty or no API key, check curated dataset
+    places = Array.from(combinedMap.values());
+
+    // 4. Fallback synthesis if web APIs returned empty
     if (places.length === 0) {
-      const cityKey = (city || query || '').toLowerCase();
-      let matchedCurated = null;
-
-      if (cityKey.includes('jaipur')) matchedCurated = CURATED_CITIES_DATA.jaipur;
-      else if (cityKey.includes('nyc') || cityKey.includes('new york')) matchedCurated = CURATED_CITIES_DATA.nyc;
-      else if (cityKey.includes('paris')) matchedCurated = CURATED_CITIES_DATA.paris;
-      else if (cityKey.includes('rome')) matchedCurated = CURATED_CITIES_DATA.rome;
-      else if (cityKey.includes('delhi')) matchedCurated = CURATED_CITIES_DATA.delhi;
-      else if (cityKey.includes('kurukshetra')) matchedCurated = CURATED_CITIES_DATA.kurukshetra;
-      else if (cityKey.includes('tokyo')) matchedCurated = CURATED_CITIES_DATA.tokyo;
-
-      if (matchedCurated) {
-        // If query specifically asks for a category (e.g. "forts in jaipur"),
-        // prioritize that category!
-        const matchingCategoryPlaces = matchedCurated.filter((item) => {
-          if (detectedCategory === 'all') return true;
-          return item.category === detectedCategory;
-        });
-
-        const listToUse = matchingCategoryPlaces.length > 0 ? matchingCategoryPlaces : matchedCurated;
-
-        places = listToUse.map((item) => ({
-          ...item,
-          distanceKm: calculateDistance(lat, lon, item.lat, item.lon) || 1.4,
-          distanceFromUserKm: calculateDistance(userLat, userLon, item.lat, item.lon)
-        }));
-      }
-    }
-
-    // 3. Fallback synthesis for any custom coordinates
-    if (places.length === 0 && lat != null && lon != null) {
-      const locName = city || 'Destination';
       const labelMap = {
-        forts: 'Ancient Hilltop Fort & Palace',
+        forts: 'Historic Fortress & Citadel',
         museums: 'Museum of Cultural Heritage',
         monuments: 'Memorial Monument & Sculpture',
         temples: 'Historic Temple & Shrine',
@@ -766,15 +407,13 @@ app.get('/api/places', async (req, res) => {
       places = [
         {
           id: 'synth-1',
-          name: `${locName} ${title}`,
+          name: `${city} ${title}`,
           category: detectedCategory !== 'all' ? detectedCategory : 'landmarks',
           categoryLabel: title,
-          address: `${locName} Center`,
+          address: `${city} Center`,
           lat: lat + 0.005,
           lon: lon + 0.005,
-          distanceKm: 0.8,
-          distanceFromUserKm: calculateDistance(userLat, userLon, lat + 0.005, lon + 0.005),
-          description: `Prime tourist attraction showcasing the heritage, architecture, and character of ${locName}.`,
+          description: `Prime tourist attraction showcasing the heritage, architecture, and character of ${city}.`,
           rating: 4.8,
           recommendedTime: 'Morning',
           suggestedHours: '2.5 hrs',
@@ -782,14 +421,12 @@ app.get('/api/places', async (req, res) => {
         },
         {
           id: 'synth-2',
-          name: `${locName} Royal Heritage Quarter`,
+          name: `${city} Heritage Promenade`,
           category: 'historic',
           categoryLabel: 'Historical District',
-          address: `Heritage Promenade, ${locName}`,
+          address: `Historic Quarter, ${city}`,
           lat: lat - 0.004,
           lon: lon + 0.003,
-          distanceKm: 1.2,
-          distanceFromUserKm: calculateDistance(userLat, userLon, lat - 0.004, lon + 0.003),
           description: `Vibrant pedestrian promenade with historic architecture, cultural points, and scenic viewpoints.`,
           rating: 4.7,
           recommendedTime: 'Afternoon',
@@ -798,15 +435,13 @@ app.get('/api/places', async (req, res) => {
         },
         {
           id: 'synth-3',
-          name: `${locName} Skyline Viewpoint & Ridge`,
+          name: `${city} Ridge Viewpoint`,
           category: 'viewpoints',
           categoryLabel: 'Observation Point',
-          address: `Overlook Ridge, ${locName}`,
+          address: `Overlook Ridge, ${city}`,
           lat: lat + 0.008,
           lon: lon - 0.006,
-          distanceKm: 1.8,
-          distanceFromUserKm: calculateDistance(userLat, userLon, lat + 0.008, lon - 0.006),
-          description: `Scenic vantage point offering panoramic sunset vistas across ${locName} and surrounding landmarks.`,
+          description: `Scenic vantage point offering panoramic sunset vistas across ${city} and surrounding landmarks.`,
           rating: 4.9,
           recommendedTime: 'Evening',
           suggestedHours: '1.5 hrs',
@@ -815,11 +450,18 @@ app.get('/api/places', async (req, res) => {
       ];
     }
 
+    // Calculate distances from city center and user location
+    places = places.map((p) => ({
+      ...p,
+      distanceKm: calculateDistance(lat, lon, p.lat, p.lon) || 1.2,
+      distanceFromUserKm: calculateDistance(userLat, userLon, p.lat, p.lon)
+    }));
+
     const responsePayload = {
       success: true,
-      query,
+      query: rawQuery,
       city,
-      country: country || (city === 'Jaipur' || city === 'Delhi' || city === 'Kurukshetra' ? 'India' : 'United States'),
+      country: country || 'World',
       center: { lat, lon },
       detectedCategory,
       totalCount: places.length,
@@ -846,18 +488,9 @@ app.get('/api/weather', async (req, res) => {
     let lon = req.query.lon ? parseFloat(req.query.lon) : null;
     const city = req.query.city || 'Destination';
 
-    // Check if coordinates need city resolution
-    if (city && (lat == null || lon == null)) {
-      const qCity = KNOWN_CITIES[city.toLowerCase()];
-      if (qCity) {
-        lat = qCity.lat;
-        lon = qCity.lon;
-      }
-    }
-
     if (lat == null || lon == null) {
-      lat = 26.9124;
-      lon = 75.7873;
+      lat = 26.9154;
+      lon = 75.8189;
     }
 
     const cacheKey = `weather_${lat.toFixed(2)}_${lon.toFixed(2)}`;
@@ -895,12 +528,12 @@ app.get('/api/weather', async (req, res) => {
 
     const payload = {
       city,
-      temperature: current?.temperature ?? 28,
+      temperature: current?.temperature ?? 24,
       condition: interpretation.condition,
       icon: interpretation.icon,
       sightseeingTip: interpretation.tip,
-      highTemp: daily?.temperature_2m_max?.[0] ?? 31,
-      lowTemp: daily?.temperature_2m_min?.[0] ?? 20,
+      highTemp: daily?.temperature_2m_max?.[0] ?? 28,
+      lowTemp: daily?.temperature_2m_min?.[0] ?? 17,
       precipitationProb: daily?.precipitation_probability_max?.[0] ?? 0,
       windSpeed: current?.windspeed ?? 10
     };
@@ -911,12 +544,12 @@ app.get('/api/weather', async (req, res) => {
     console.error('Weather API error:', err);
     res.json({
       city: req.query.city || 'Destination',
-      temperature: 28,
+      temperature: 24,
       condition: 'Sunny & Pleasant',
       icon: '☀️',
-      sightseeingTip: 'Ideal conditions for exploring historic forts and viewpoints.',
-      highTemp: 31,
-      lowTemp: 20,
+      sightseeingTip: 'Ideal conditions for exploring historic sights and viewpoints.',
+      highTemp: 28,
+      lowTemp: 17,
       precipitationProb: 0,
       windSpeed: 10
     });
@@ -948,19 +581,19 @@ app.post('/api/itinerary', (req, res) => {
         timeBlock: 'Morning (09:00 - 12:30)',
         focus: 'Key Hilltop Forts & Cultural Landmarks',
         places: morningSlot,
-        recommendation: 'Start early to beat midday heat and explore grand fort courtyards in cool morning light.'
+        recommendation: 'Start early to beat midday heat and explore grand sights in cool morning light.'
       },
       {
         timeBlock: 'Afternoon (13:30 - 17:00)',
-        focus: 'Royal Palaces, Museums & Heritage Promenades',
+        focus: 'Palaces, Museums & Heritage Promenades',
         places: afternoonSlot,
-        recommendation: 'Explore indoor palaces, museum galleries, and armories during peak afternoon hours.'
+        recommendation: 'Explore indoor palaces, museum galleries, and shaded heritage walks during afternoon hours.'
       },
       {
         timeBlock: 'Evening (18:00 - 20:30)',
-        focus: 'Ridge Viewpoints, Sunsets & Illuminated Facades',
+        focus: 'Viewpoints, Sunsets & Illuminated Facades',
         places: eveningSlot,
-        recommendation: 'Head to the ridge for golden hour sunset views overlooking the city and night illuminations.'
+        recommendation: 'Head to the ridge or observation point for golden hour sunset views and evening lights.'
       }
     ];
 

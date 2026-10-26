@@ -24,6 +24,6 @@
     "STAGING_DOMAIN": "",
     "PROD_DOMAIN": "",      
     "ENVIRONMENT": "development",
-    "GEOAPIFY_API_KEY": ""
+    "GEOAPIFY_API_KEY": "c1352d073f8944cf81539e9eae311c4d"
   }
 }

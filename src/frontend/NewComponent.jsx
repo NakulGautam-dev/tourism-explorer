@@ -9,7 +9,9 @@ import {
   IconButton,
   Tooltip,
   Paper,
-  Button
+  Button,
+  TextField,
+  InputAdornment
 } from '@mui/material';
 import ExploreIcon from '@mui/icons-material/Explore';
 import CalendarMonthIcon from '@mui/icons-material/CalendarMonth';
@@ -17,8 +19,9 @@ import MapIcon from '@mui/icons-material/Map';
 import WbSunnyIcon from '@mui/icons-material/WbSunny';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import NearMeIcon from '@mui/icons-material/NearMe';
-import LocationCityIcon from '@mui/icons-material/LocationCity';
+import SearchIcon from '@mui/icons-material/Search';
 import BookmarkIcon from '@mui/icons-material/Bookmark';
+import ArrowForwardIcon from '@mui/icons-material/ArrowForward';
 
 import AttractionCard from './components/AttractionCard';
 import CategoryFilter from './components/CategoryFilter';
@@ -27,6 +30,17 @@ import InteractiveMap from './components/InteractiveMap';
 import DayPlanner from './components/DayPlanner';
 import PlaceDetailModal from './components/PlaceDetailModal';
 import EmptyState from './components/EmptyState';
+
+const QUICK_DISCOVERY_TAGS = [
+  'forts in jaipur',
+  'Tourist attractions in NYC',
+  'Things to do in Paris',
+  'museums in Delhi',
+  'best places to visit in Kurukshetra',
+  'Sights near Tokyo',
+  'castles in Edinburgh',
+  'museums in Amsterdam'
+];
 
 function NewComponent(props) {
   // 1. Determine API URL per hyperDart conventions
@@ -40,11 +54,11 @@ function NewComponent(props) {
     ? props.searchData[0]
     : props.searchData || {};
 
-  const query = rawSearchData.query || props.searchQuery || 'Tourist attractions in NYC';
+  const platformQuery = rawSearchData.query || props.searchQuery || 'Tourist attractions in NYC';
   const entity = rawSearchData.entities?.[0] || null;
   const geo = entity?.entityInfo?.geo || null;
 
-  // City & coordinates from entity
+  // Initial city & coordinates from platform entity
   const initialCity = geo?.city || entity?.word || 'New York City';
   const initialCountry = geo?.country || 'United States';
   const initialLat = geo?.lat ?? 40.71427;
@@ -63,6 +77,9 @@ function NewComponent(props) {
   const isDark = themeName === 'dark' || themeName === 'lightsOut';
 
   // 4. Component State
+  const [activeQuery, setActiveQuery] = useState(platformQuery);
+  const [searchInput, setSearchInput] = useState(platformQuery);
+
   const [activeCity, setActiveCity] = useState(initialCity);
   const [activeCountry, setActiveCountry] = useState(initialCountry);
   const [activeCoords, setActiveCoords] = useState({ lat: initialLat, lon: initialLon });
@@ -80,30 +97,40 @@ function NewComponent(props) {
 
   const loadedSignaledRef = useRef(false);
 
-  // 5. Fetch Attractions & Weather from Backend Worker
-  const fetchData = async () => {
+  // Sync with incoming platform query changes
+  useEffect(() => {
+    if (platformQuery && platformQuery !== activeQuery) {
+      setActiveQuery(platformQuery);
+      setSearchInput(platformQuery);
+    }
+  }, [platformQuery]);
+
+  // 5. Fetch Attractions & Weather from Backend Worker (Automatic Web Extraction)
+  const fetchData = async (queryToSearch = activeQuery) => {
     setLoading(true);
     setError(null);
 
     try {
       // Build /api/places URL
       const placesUrl = new URL(`${API_URL}/api/places`);
-      placesUrl.searchParams.set('lat', initialLat);
-      placesUrl.searchParams.set('lon', initialLon);
-      placesUrl.searchParams.set('city', initialCity);
-      placesUrl.searchParams.set('country', initialCountry);
-      placesUrl.searchParams.set('query', query);
+      placesUrl.searchParams.set('query', queryToSearch);
+      if (activeCoords.lat != null && activeCoords.lon != null) {
+        placesUrl.searchParams.set('lat', activeCoords.lat);
+        placesUrl.searchParams.set('lon', activeCoords.lon);
+      }
+      placesUrl.searchParams.set('city', activeCity);
+      placesUrl.searchParams.set('country', activeCountry);
       if (userLat != null && userLon != null) {
         placesUrl.searchParams.set('userLat', userLat);
         placesUrl.searchParams.set('userLon', userLon);
       }
 
-      // 1. Fetch places first
+      // 1. Fetch live places from backend (Geoapify + Wikipedia Web Discovery)
       const placesRes = await fetch(placesUrl.toString()).then((r) => r.json());
 
-      let currentLat = initialLat;
-      let currentLon = initialLon;
-      let currentCityName = initialCity;
+      let currentLat = activeCoords.lat;
+      let currentLon = activeCoords.lon;
+      let currentCityName = activeCity;
 
       if (placesRes && placesRes.success) {
         setPlaces(placesRes.places || []);
@@ -125,7 +152,7 @@ function NewComponent(props) {
         throw new Error('Unable to retrieve places data');
       }
 
-      // 2. Fetch weather for the resolved city & coordinates
+      // 2. Fetch weather for the newly resolved city & coordinates
       const weatherUrl = new URL(`${API_URL}/api/weather`);
       weatherUrl.searchParams.set('lat', currentLat);
       weatherUrl.searchParams.set('lon', currentLon);
@@ -152,8 +179,20 @@ function NewComponent(props) {
   };
 
   useEffect(() => {
-    fetchData();
-  }, [initialLat, initialLon, query, initialCity]);
+    fetchData(activeQuery);
+  }, [activeQuery]);
+
+  // Handle user typing a new query in the in-component live search bar
+  const handleSearchSubmit = (e) => {
+    if (e) e.preventDefault();
+    if (!searchInput.trim()) return;
+    setActiveQuery(searchInput.trim());
+  };
+
+  const handleQuickTagClick = (tag) => {
+    setSearchInput(tag);
+    setActiveQuery(tag);
+  };
 
   // 6. Category Counts Calculation
   const categoryCounts = useMemo(() => {
@@ -198,6 +237,102 @@ function NewComponent(props) {
         boxSizing: 'border-box'
       }}
     >
+      {/* Interactive Global Travel Search Bar */}
+      <Box component="form" onSubmit={handleSearchSubmit} sx={{ mb: 2 }}>
+        <Paper
+          elevation={0}
+          sx={{
+            display: 'flex',
+            alignItems: 'center',
+            backgroundColor: isDark ? '#1e293b' : '#f8fafc',
+            border: `1px solid ${border}`,
+            borderRadius: '12px',
+            px: 1.5,
+            py: 0.5,
+            transition: 'border-color 0.2s',
+            '&:focus-within': {
+              borderColor: isDark ? '#60a5fa' : '#2563eb',
+              boxShadow: isDark
+                ? '0 0 0 2px rgba(96,165,250,0.2)'
+                : '0 0 0 2px rgba(37,99,235,0.15)'
+            }
+          }}
+        >
+          <SearchIcon sx={{ color: textSecondary, mr: 1, fontSize: 20 }} />
+          <TextField
+            fullWidth
+            variant="standard"
+            placeholder="Search any place or sight (e.g. castles in Edinburgh, forts in Jaipur, museums in Amsterdam)..."
+            value={searchInput}
+            onChange={(e) => setSearchInput(e.target.value)}
+            InputProps={{
+              disableUnderline: true,
+              sx: {
+                color: textPrimary,
+                fontSize: '0.88rem',
+                fontWeight: 500
+              }
+            }}
+          />
+          <Button
+            type="submit"
+            size="small"
+            variant="contained"
+            disabled={loading}
+            sx={{
+              ml: 1,
+              borderRadius: '8px',
+              textTransform: 'none',
+              fontWeight: 600,
+              fontSize: '0.78rem',
+              backgroundColor: isDark ? '#3b82f6' : '#2563eb',
+              flexShrink: 0
+            }}
+          >
+            Explore
+          </Button>
+        </Paper>
+
+        {/* Quick Discovery Pills */}
+        <Box
+          sx={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 0.8,
+            overflowX: 'auto',
+            mt: 1,
+            pb: 0.5,
+            '&::-webkit-scrollbar': { height: 3 },
+            '&::-webkit-scrollbar-thumb': { backgroundColor: isDark ? '#334155' : '#cbd5e1' }
+          }}
+        >
+          <Typography variant="caption" sx={{ color: textSecondary, fontWeight: 600, flexShrink: 0 }}>
+            Try:
+          </Typography>
+          {QUICK_DISCOVERY_TAGS.map((tag, idx) => (
+            <Chip
+              key={idx}
+              label={tag}
+              size="small"
+              clickable
+              onClick={() => handleQuickTagClick(tag)}
+              sx={{
+                fontSize: '0.7rem',
+                height: 22,
+                backgroundColor: activeQuery.toLowerCase() === tag.toLowerCase()
+                  ? isDark ? '#2563eb' : '#1d4ed8'
+                  : isDark ? '#1e293b' : '#f1f5f9',
+                color: activeQuery.toLowerCase() === tag.toLowerCase()
+                  ? '#ffffff'
+                  : textSecondary,
+                border: `1px solid ${border}`,
+                flexShrink: 0
+              }}
+            />
+          ))}
+        </Box>
+      </Box>
+
       {/* Top Destination Header Bar */}
       <Box
         sx={{
@@ -280,7 +415,7 @@ function NewComponent(props) {
         <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', py: 8, gap: 2 }}>
           <CircularProgress size={36} sx={{ color: '#2563eb' }} />
           <Typography variant="body2" sx={{ color: textSecondary, fontWeight: 500 }}>
-            Discovering top attractions and sights in {activeCity}...
+            Extracting real-time sights and attractions in {activeCity}...
           </Typography>
         </Box>
       ) : isSidebar ? (
@@ -334,7 +469,7 @@ function NewComponent(props) {
                 onSelectCategory={setSelectedCategory}
                 counts={categoryCounts}
                 detectedFromQuery={detectedCategory}
-                query={query}
+                query={activeQuery}
                 isDark={isDark}
               />
 
@@ -343,7 +478,7 @@ function NewComponent(props) {
                   city={activeCity}
                   category={selectedCategory}
                   onResetCategory={() => setSelectedCategory('all')}
-                  onRetry={fetchData}
+                  onRetry={() => fetchData(activeQuery)}
                   isDark={isDark}
                 />
               ) : (
@@ -403,7 +538,7 @@ function NewComponent(props) {
               onSelectCategory={setSelectedCategory}
               counts={categoryCounts}
               detectedFromQuery={detectedCategory}
-              query={query}
+              query={activeQuery}
               isDark={isDark}
             />
 
@@ -412,7 +547,7 @@ function NewComponent(props) {
                 city={activeCity}
                 category={selectedCategory}
                 onResetCategory={() => setSelectedCategory('all')}
-                onRetry={fetchData}
+                onRetry={() => fetchData(activeQuery)}
                 isDark={isDark}
               />
             ) : (
