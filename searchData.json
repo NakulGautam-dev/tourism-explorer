@@ -1,6 +1,94 @@
 [
   {
     "component": "@hyperdart/tourismexplorer",
+    "query": "tourist attraction in banglore",
+    "entities": [
+      {
+        "word": "Bengaluru",
+        "collectionName": "CITIES",
+        "collectionType": "HD_LOCATION",
+        "entityInfo": {
+          "geo": {
+            "tz": "Asia/Kolkata",
+            "lat": 12.9716,
+            "city": "Bengaluru",
+            "long": 77.5946,
+            "state": "Karnataka",
+            "country": "India",
+            "countryCode": "IN"
+          }
+        },
+        "entityType": "LOCATION",
+        "description": "Silicon Valley of India and garden city",
+        "relevanceScore": 100
+      }
+    ],
+    "keyword": [
+      {
+        "word": "tourist attraction",
+        "description": ""
+      }
+    ],
+    "genericQuery": "tourist attraction in HD_LOCATION__CITIES",
+    "userLocation": {
+      "position": {
+        "coords": {
+          "latitude": 26.4631,
+          "longitude": 80.3479
+        },
+        "city": "Kanpur",
+        "countryCode": "IN"
+      },
+      "source": "ip"
+    },
+    "suggestedPlace": "mainline"
+  },
+  {
+    "component": "@hyperdart/tourismexplorer",
+    "query": "tourist attractions in bangalore",
+    "entities": [
+      {
+        "word": "Bengaluru",
+        "collectionName": "CITIES",
+        "collectionType": "HD_LOCATION",
+        "entityInfo": {
+          "geo": {
+            "tz": "Asia/Kolkata",
+            "lat": 12.9716,
+            "city": "Bengaluru",
+            "long": 77.5946,
+            "state": "Karnataka",
+            "country": "India",
+            "countryCode": "IN"
+          }
+        },
+        "entityType": "LOCATION",
+        "description": "Silicon Valley of India and garden city",
+        "relevanceScore": 100
+      }
+    ],
+    "keyword": [
+      {
+        "word": "tourist attractions",
+        "description": ""
+      }
+    ],
+    "genericQuery": "tourist attractions in HD_LOCATION__CITIES",
+    "userLocation": {
+      "position": {
+        "coords": {
+          "latitude": 26.4631,
+          "longitude": 80.3479
+        },
+        "city": "Kanpur",
+        "countryCode": "IN"
+      },
+      "source": "ip"
+    },
+    "suggestedPlace": "mainline"
+  },
+  {
+    "component": "@hyperdart/tourismexplorer",
     "query": "forts in jaipur",
     "entities": [
       {

@@ -9,9 +9,7 @@ import {
   IconButton,
   Tooltip,
   Paper,
-  Button,
-  TextField,
-  InputAdornment
+  Button
 } from '@mui/material';
 import ExploreIcon from '@mui/icons-material/Explore';
 import CalendarMonthIcon from '@mui/icons-material/CalendarMonth';
@@ -19,9 +17,12 @@ import MapIcon from '@mui/icons-material/Map';
 import WbSunnyIcon from '@mui/icons-material/WbSunny';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import NearMeIcon from '@mui/icons-material/NearMe';
-import SearchIcon from '@mui/icons-material/Search';
-import BookmarkIcon from '@mui/icons-material/Bookmark';
 import ArrowForwardIcon from '@mui/icons-material/ArrowForward';
+import ArrowBackIcon from '@mui/icons-material/ArrowBack';
+import OpenInFullIcon from '@mui/icons-material/OpenInFull';
+import CloseFullscreenIcon from '@mui/icons-material/CloseFullscreen';
+import LocationOnIcon from '@mui/icons-material/LocationOn';
+import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
 
 import AttractionCard from './components/AttractionCard';
 import CategoryFilter from './components/CategoryFilter';
@@ -30,18 +31,6 @@ import InteractiveMap from './components/InteractiveMap';
 import DayPlanner from './components/DayPlanner';
 import PlaceDetailModal from './components/PlaceDetailModal';
 import EmptyState from './components/EmptyState';
-
-const QUICK_DISCOVERY_TAGS = [
-  'tourist attraction in banglore',
-  'forts in jaipur',
-  'Tourist attractions in NYC',
-  'Things to do in Paris',
-  'museums in Delhi',
-  'best places to visit in Kurukshetra',
-  'Sights near Tokyo',
-  'castles in Edinburgh',
-  'museums in Amsterdam'
-];
 
 function NewComponent(props) {
   // 1. Determine API URL per hyperDart conventions
@@ -55,7 +44,8 @@ function NewComponent(props) {
     ? props.searchData[0]
     : props.searchData || {};
 
-  const platformQuery = rawSearchData.query || props.searchQuery || 'Tourist attractions in NYC';
+  // Read query directly from top platform/sandbox search bar
+  const platformQuery = props.searchQuery || rawSearchData.query || 'Tourist attractions in NYC';
   const entity = rawSearchData.entities?.[0] || null;
   const geo = entity?.entityInfo?.geo || null;
 
@@ -74,13 +64,51 @@ function NewComponent(props) {
   // 3. Layout & Theme detection
   const format = props.UIOptions?.format || props.format || 'sidebar';
   const isSidebar = format === 'sidebar';
-  const themeName = props.UIOptions?.themeName || (props.theme?.palette?.mode) || 'light';
+  const themeName = props.UIOptions?.themeName || props.theme?.palette?.mode || 'light';
   const isDark = themeName === 'dark' || themeName === 'lightsOut';
 
-  // 4. Component State
-  const [activeQuery, setActiveQuery] = useState(platformQuery);
-  const [searchInput, setSearchInput] = useState(platformQuery);
+  // 4. Quick Panel vs Fullscreen State
+  const [isFullScreen, setIsFullScreen] = useState(
+    props.UIOptions?.format === 'fullscreen'
+  );
 
+  // Sync when external UIOptions.format changes from sandbox toolbar
+  useEffect(() => {
+    if (props.UIOptions?.format === 'fullscreen') {
+      setIsFullScreen(true);
+    } else if (props.UIOptions?.format === 'sidebar' || props.UIOptions?.format === 'mainline') {
+      setIsFullScreen(false);
+    }
+  }, [props.UIOptions?.format]);
+
+  // Handlers for switching Full Screen mode
+  const handleOpenFullScreen = () => {
+    if (props.messageHandlers?.switchFullScreen) {
+      props.messageHandlers.switchFullScreen(true);
+    }
+    setIsFullScreen(true);
+  };
+
+  const handleCloseFullScreen = () => {
+    if (props.messageHandlers?.switchFullScreen) {
+      props.messageHandlers.switchFullScreen(false);
+    }
+    setIsFullScreen(false);
+  };
+
+  // Keyboard shortcut: Press Escape to exit Full Screen
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape' && isFullScreen) {
+        handleCloseFullScreen();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isFullScreen]);
+
+  // 5. Data State
+  const [activeQuery, setActiveQuery] = useState(platformQuery);
   const [activeCity, setActiveCity] = useState(initialCity);
   const [activeCountry, setActiveCountry] = useState(initialCountry);
   const [activeCoords, setActiveCoords] = useState({ lat: initialLat, lon: initialLon });
@@ -98,15 +126,14 @@ function NewComponent(props) {
 
   const loadedSignaledRef = useRef(false);
 
-  // Sync with incoming platform query changes
+  // Sync with incoming platform query changes from top search bar
   useEffect(() => {
     if (platformQuery && platformQuery !== activeQuery) {
       setActiveQuery(platformQuery);
-      setSearchInput(platformQuery);
     }
   }, [platformQuery]);
 
-  // 5. Fetch Attractions & Weather from Backend Worker (Automatic Web Extraction)
+  // 6. Fetch Attractions & Weather from Backend Worker (Automatic Web Extraction)
   const fetchData = async (queryToSearch = activeQuery) => {
     setLoading(true);
     setError(null);
@@ -183,19 +210,7 @@ function NewComponent(props) {
     fetchData(activeQuery);
   }, [activeQuery]);
 
-  // Handle user typing a new query in the in-component live search bar
-  const handleSearchSubmit = (e) => {
-    if (e) e.preventDefault();
-    if (!searchInput.trim()) return;
-    setActiveQuery(searchInput.trim());
-  };
-
-  const handleQuickTagClick = (tag) => {
-    setSearchInput(tag);
-    setActiveQuery(tag);
-  };
-
-  // 6. Category Counts Calculation
+  // 7. Category Counts Calculation
   const categoryCounts = useMemo(() => {
     const counts = { all: places.length };
     places.forEach((p) => {
@@ -233,246 +248,167 @@ function NewComponent(props) {
         backgroundColor: containerBg,
         color: textPrimary,
         minHeight: '100%',
-        p: isSidebar ? 2 : 3,
+        p: isFullScreen ? { xs: 2, md: 3 } : 2,
         fontFamily: 'Inter, system-ui, -apple-system, sans-serif',
         boxSizing: 'border-box'
       }}
     >
-      {/* Interactive Global Travel Search Bar */}
-      <Box component="form" onSubmit={handleSearchSubmit} sx={{ mb: 2 }}>
-        <Paper
-          elevation={0}
-          sx={{
-            display: 'flex',
-            alignItems: 'center',
-            backgroundColor: isDark ? '#1e293b' : '#f8fafc',
-            border: `1px solid ${border}`,
-            borderRadius: '12px',
-            px: 1.5,
-            py: 0.5,
-            transition: 'border-color 0.2s',
-            '&:focus-within': {
-              borderColor: isDark ? '#60a5fa' : '#2563eb',
-              boxShadow: isDark
-                ? '0 0 0 2px rgba(96,165,250,0.2)'
-                : '0 0 0 2px rgba(37,99,235,0.15)'
-            }
-          }}
-        >
-          <SearchIcon sx={{ color: textSecondary, mr: 1, fontSize: 20 }} />
-          <TextField
-            fullWidth
-            variant="standard"
-            placeholder="Search any place or sight (e.g. castles in Edinburgh, forts in Jaipur, museums in Amsterdam)..."
-            value={searchInput}
-            onChange={(e) => setSearchInput(e.target.value)}
-            InputProps={{
-              disableUnderline: true,
-              sx: {
-                color: textPrimary,
-                fontSize: '0.88rem',
-                fontWeight: 500
-              }
-            }}
-          />
-          <Button
-            type="submit"
-            size="small"
-            variant="contained"
-            disabled={loading}
-            sx={{
-              ml: 1,
-              borderRadius: '8px',
-              textTransform: 'none',
-              fontWeight: 600,
-              fontSize: '0.78rem',
-              backgroundColor: isDark ? '#3b82f6' : '#2563eb',
-              flexShrink: 0
-            }}
-          >
-            Explore
-          </Button>
-        </Paper>
-
-        {/* Quick Discovery Pills */}
-        <Box
-          sx={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 0.8,
-            overflowX: 'auto',
-            mt: 1,
-            pb: 0.5,
-            '&::-webkit-scrollbar': { height: 3 },
-            '&::-webkit-scrollbar-thumb': { backgroundColor: isDark ? '#334155' : '#cbd5e1' }
-          }}
-        >
-          <Typography variant="caption" sx={{ color: textSecondary, fontWeight: 600, flexShrink: 0 }}>
-            Try:
-          </Typography>
-          {QUICK_DISCOVERY_TAGS.map((tag, idx) => (
-            <Chip
-              key={idx}
-              label={tag}
-              size="small"
-              clickable
-              onClick={() => handleQuickTagClick(tag)}
-              sx={{
-                fontSize: '0.7rem',
-                height: 22,
-                backgroundColor: activeQuery.toLowerCase() === tag.toLowerCase()
-                  ? isDark ? '#2563eb' : '#1d4ed8'
-                  : isDark ? '#1e293b' : '#f1f5f9',
-                color: activeQuery.toLowerCase() === tag.toLowerCase()
-                  ? '#ffffff'
-                  : textSecondary,
-                border: `1px solid ${border}`,
-                flexShrink: 0
-              }}
-            />
-          ))}
-        </Box>
-      </Box>
-
-      {/* Top Destination Header Bar */}
-      <Box
-        sx={{
-          display: 'flex',
-          alignItems: 'flex-start',
-          justifyContent: 'space-between',
-          flexWrap: 'wrap',
-          gap: 1.5,
-          mb: 2,
-          pb: 1.5,
-          borderBottom: `1px solid ${border}`
-        }}
-      >
+      {/* ─────────────────────────────────────────────────────────────
+          MODE A: FULL SCREEN VIEW (Activated when user clicks "See More" or "Full Screen")
+         ───────────────────────────────────────────────────────────── */}
+      {isFullScreen ? (
         <Box>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5 }}>
-            <Box
-              sx={{
-                width: 34,
-                height: 34,
-                borderRadius: '8px',
-                backgroundColor: isDark ? 'rgba(59,130,246,0.2)' : '#eff6ff',
-                color: isDark ? '#60a5fa' : '#2563eb',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                flexShrink: 0
-              }}
-            >
-              <ExploreIcon fontSize="small" />
-            </Box>
-
-            <Box>
-              <Typography
-                variant="h6"
-                sx={{
-                  fontWeight: 800,
-                  fontSize: isSidebar ? '1.15rem' : '1.35rem',
-                  lineHeight: 1.2,
-                  color: textPrimary
-                }}
-              >
-                {activeCity}
-              </Typography>
-              <Typography variant="caption" sx={{ color: textSecondary }}>
-                {activeCountry} • Lat {activeCoords.lat?.toFixed(2)}°, Lon {activeCoords.lon?.toFixed(2)}°
-              </Typography>
-            </Box>
-          </Box>
-        </Box>
-
-        {/* User Location Distance Badge (Kanpur / User IP) */}
-        {userCity && (
+          {/* Top Header Bar with Back Button */}
           <Box
             sx={{
               display: 'flex',
               alignItems: 'center',
-              gap: 0.8,
-              backgroundColor: isDark ? '#1e293b' : '#f8fafc',
-              border: `1px solid ${border}`,
-              borderRadius: '20px',
-              px: 1.2,
-              py: 0.4
+              justifyContent: 'space-between',
+              flexWrap: 'wrap',
+              gap: 1.5,
+              mb: 2.5,
+              pb: 2,
+              borderBottom: `1px solid ${border}`
             }}
           >
-            <NearMeIcon sx={{ fontSize: 13, color: '#10b981' }} />
-            <Typography variant="caption" sx={{ color: textSecondary, fontWeight: 500 }}>
-              Searching from <b>{userCity}</b>
-            </Typography>
-          </Box>
-        )}
-      </Box>
-
-      {/* Weather Widget */}
-      {weather && (
-        <WeatherWidget weather={weather} isDark={isDark} isSidebar={isSidebar} />
-      )}
-
-      {/* Loading Spinner */}
-      {loading ? (
-        <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', py: 8, gap: 2 }}>
-          <CircularProgress size={36} sx={{ color: '#2563eb' }} />
-          <Typography variant="body2" sx={{ color: textSecondary, fontWeight: 500 }}>
-            Extracting real-time sights and attractions in {activeCity}...
-          </Typography>
-        </Box>
-      ) : isSidebar ? (
-        /* SIDEBAR VIEW: Compact Tabbed Layout */
-        <Box>
-          {/* Navigation Tabs for Sidebar */}
-          <Paper
-            elevation={0}
-            sx={{
-              backgroundColor: isDark ? '#1e293b' : '#f1f5f9',
-              borderRadius: '10px',
-              p: 0.4,
-              mb: 2,
-              border: `1px solid ${border}`
-            }}
-          >
-            <Tabs
-              value={sidebarTab}
-              onChange={(e, val) => setSidebarTab(val)}
-              variant="fullWidth"
-              sx={{
-                minHeight: 36,
-                '& .MuiTabs-indicator': { display: 'none' },
-                '& .MuiTab-root': {
-                  minHeight: 34,
-                  py: 0.5,
-                  px: 1,
+            {/* Left: Back Button & Title */}
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+              <Button
+                variant="outlined"
+                size="small"
+                onClick={handleCloseFullScreen}
+                startIcon={<ArrowBackIcon />}
+                sx={{
+                  borderRadius: '10px',
                   textTransform: 'none',
-                  fontSize: '0.78rem',
                   fontWeight: 600,
-                  borderRadius: '7px',
-                  color: textSecondary,
-                  '&.Mui-selected': {
-                    color: '#ffffff',
-                    backgroundColor: isDark ? '#2563eb' : '#1d4ed8'
+                  fontSize: '0.85rem',
+                  color: textPrimary,
+                  borderColor: border,
+                  px: 1.8,
+                  py: 0.6,
+                  '&:hover': {
+                    borderColor: isDark ? '#60a5fa' : '#2563eb',
+                    backgroundColor: isDark ? 'rgba(96,165,250,0.1)' : 'rgba(37,99,235,0.06)'
                   }
-                }
-              }}
-            >
-              <Tab icon={<ExploreIcon sx={{ fontSize: '15px !important' }} />} iconPosition="start" label="Sights" />
-              <Tab icon={<CalendarMonthIcon sx={{ fontSize: '15px !important' }} />} iconPosition="start" label="Day Plan" />
-              <Tab icon={<MapIcon sx={{ fontSize: '15px !important' }} />} iconPosition="start" label="Map" />
-            </Tabs>
-          </Paper>
+                }}
+              >
+                Back to Results
+              </Button>
 
-          {/* Tab 0: Attractions List */}
-          {sidebarTab === 0 && (
+              <Box>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <Typography
+                    variant="h5"
+                    sx={{
+                      fontWeight: 800,
+                      fontSize: { xs: '1.25rem', md: '1.5rem' },
+                      color: textPrimary,
+                      lineHeight: 1.2
+                    }}
+                  >
+                    {activeCity}
+                  </Typography>
+                  <Chip
+                    label="Full Guide"
+                    size="small"
+                    sx={{
+                      fontSize: '0.72rem',
+                      height: 22,
+                      fontWeight: 700,
+                      backgroundColor: isDark ? 'rgba(59,130,246,0.2)' : '#eff6ff',
+                      color: isDark ? '#60a5fa' : '#2563eb',
+                      border: `1px solid ${isDark ? 'rgba(59,130,246,0.4)' : '#bfdbfe'}`
+                    }}
+                  />
+                </Box>
+                <Typography variant="caption" sx={{ color: textSecondary }}>
+                  {activeCountry} • Lat {activeCoords.lat?.toFixed(2)}°, Lon {activeCoords.lon?.toFixed(2)}°
+                </Typography>
+              </Box>
+            </Box>
+
+            {/* Right: Weather & Origin distance chip */}
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.2 }}>
+              {weather && (
+                <Chip
+                  icon={<WbSunnyIcon sx={{ fontSize: '15px !important', color: '#f59e0b' }} />}
+                  label={`${weather.temperature}°C • ${weather.condition}`}
+                  size="small"
+                  sx={{
+                    fontWeight: 600,
+                    fontSize: '0.75rem',
+                    backgroundColor: isDark ? '#1e293b' : '#f8fafc',
+                    border: `1px solid ${border}`,
+                    color: textPrimary
+                  }}
+                />
+              )}
+
+              {userCity && (
+                <Box
+                  sx={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 0.6,
+                    backgroundColor: isDark ? '#1e293b' : '#f8fafc',
+                    border: `1px solid ${border}`,
+                    borderRadius: '20px',
+                    px: 1.2,
+                    py: 0.4
+                  }}
+                >
+                  <NearMeIcon sx={{ fontSize: 13, color: '#10b981' }} />
+                  <Typography variant="caption" sx={{ color: textSecondary, fontWeight: 500 }}>
+                    From <b>{userCity}</b>
+                  </Typography>
+                </Box>
+              )}
+
+              <Tooltip title="Exit Full Screen (Esc)">
+                <IconButton
+                  size="small"
+                  onClick={handleCloseFullScreen}
+                  sx={{
+                    color: textSecondary,
+                    border: `1px solid ${border}`,
+                    borderRadius: '8px',
+                    p: 0.6
+                  }}
+                >
+                  <CloseFullscreenIcon sx={{ fontSize: 18 }} />
+                </IconButton>
+              </Tooltip>
+            </Box>
+          </Box>
+
+          {/* Weather Widget */}
+          {weather && (
+            <WeatherWidget weather={weather} isDark={isDark} isSidebar={false} />
+          )}
+
+          {/* Category Filter Chips */}
+          <CategoryFilter
+            selectedCategory={selectedCategory}
+            onSelectCategory={setSelectedCategory}
+            counts={categoryCounts}
+            detectedFromQuery={detectedCategory}
+            query={activeQuery}
+            isDark={isDark}
+          />
+
+          {/* Full Screen Main Content: Dual-Column Wide Grid */}
+          <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', lg: '1.2fr 0.8fr' }, gap: 3 }}>
+            {/* Left Column: All Sights & Attraction Cards */}
             <Box>
-              <CategoryFilter
-                selectedCategory={selectedCategory}
-                onSelectCategory={setSelectedCategory}
-                counts={categoryCounts}
-                detectedFromQuery={detectedCategory}
-                query={activeQuery}
-                isDark={isDark}
-              />
+              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1.5 }}>
+                <Typography variant="subtitle1" sx={{ fontWeight: 700, color: textPrimary }}>
+                  All Attractions in {activeCity} ({displayedPlaces.length})
+                </Typography>
+                <Typography variant="caption" sx={{ color: textSecondary }}>
+                  Click pins on map or cards for deep insights
+                </Typography>
+              </Box>
 
               {displayedPlaces.length === 0 ? (
                 <EmptyState
@@ -489,34 +425,18 @@ function NewComponent(props) {
                     place={place}
                     index={idx}
                     isDark={isDark}
-                    isSidebar={true}
+                    isSidebar={false}
                     isSaved={!!savedPlaces[place.id]}
                     onToggleSave={handleToggleSave}
                     onSelectPlace={setSelectedPlaceForModal}
-                    onViewOnMap={(p) => {
-                      setMapPinnedPlace(p);
-                      setSidebarTab(2); // Jump to map tab
-                    }}
+                    onViewOnMap={(p) => setMapPinnedPlace(p)}
                   />
                 ))
               )}
             </Box>
-          )}
 
-          {/* Tab 1: Day Plan / Itinerary */}
-          {sidebarTab === 1 && (
-            <DayPlanner
-              places={places}
-              city={activeCity}
-              isDark={isDark}
-              isSidebar={true}
-              onSelectPlace={setSelectedPlaceForModal}
-            />
-          )}
-
-          {/* Tab 2: Interactive Vector Map */}
-          {sidebarTab === 2 && (
-            <Box>
+            {/* Right Column: Sticky Vector Map & 1-Day Itinerary Planner */}
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2.5 }}>
               <InteractiveMap
                 places={places}
                 center={activeCoords}
@@ -524,70 +444,251 @@ function NewComponent(props) {
                 selectedPlace={mapPinnedPlace}
                 onSelectPlace={setSelectedPlaceForModal}
                 isDark={isDark}
-                isSidebar={true}
+                isSidebar={false}
+              />
+
+              <DayPlanner
+                places={places}
+                city={activeCity}
+                isDark={isDark}
+                isSidebar={false}
+                onSelectPlace={setSelectedPlaceForModal}
               />
             </Box>
-          )}
+          </Box>
+
+          {/* Bottom Back Button */}
+          <Box sx={{ mt: 4, pt: 2, borderTop: `1px solid ${border}`, textAlign: 'center' }}>
+            <Button
+              variant="outlined"
+              size="medium"
+              onClick={handleCloseFullScreen}
+              startIcon={<ArrowBackIcon />}
+              sx={{
+                borderRadius: '10px',
+                textTransform: 'none',
+                fontWeight: 600,
+                color: textPrimary,
+                borderColor: border,
+                px: 3,
+                py: 0.8
+              }}
+            >
+              Back to Quick View
+            </Button>
+          </Box>
         </Box>
       ) : (
-        /* MAINLINE VIEW: Wide Dual-Column Layout */
-        <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '1.2fr 0.8fr' }, gap: 3 }}>
-          {/* Left Column: Sights & Cards */}
-          <Box>
-            <CategoryFilter
-              selectedCategory={selectedCategory}
-              onSelectCategory={setSelectedCategory}
-              counts={categoryCounts}
-              detectedFromQuery={detectedCategory}
-              query={activeQuery}
+        /* ─────────────────────────────────────────────────────────────
+            MODE B: QUICK PANEL VIEW (Concise, bite-sized preview with "See More ➔")
+           ───────────────────────────────────────────────────────────── */
+        <Box>
+          {/* Destination Header Bar */}
+          <Box
+            sx={{
+              display: 'flex',
+              alignItems: 'flex-start',
+              justifyContent: 'space-between',
+              gap: 1.5,
+              mb: 1.5,
+              pb: 1.5,
+              borderBottom: `1px solid ${border}`
+            }}
+          >
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <Box
+                sx={{
+                  width: 36,
+                  height: 36,
+                  borderRadius: '10px',
+                  backgroundColor: isDark ? 'rgba(59,130,246,0.2)' : '#eff6ff',
+                  color: isDark ? '#60a5fa' : '#2563eb',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  flexShrink: 0
+                }}
+              >
+                <ExploreIcon fontSize="small" />
+              </Box>
+
+              <Box>
+                <Typography
+                  variant="h6"
+                  sx={{
+                    fontWeight: 800,
+                    fontSize: '1.2rem',
+                    lineHeight: 1.2,
+                    color: textPrimary
+                  }}
+                >
+                  {activeCity}
+                </Typography>
+                <Typography variant="caption" sx={{ color: textSecondary }}>
+                  {activeCountry}
+                </Typography>
+              </Box>
+            </Box>
+
+            {/* Quick Header Right: Weather badge + Fullscreen toggle */}
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              {weather && (
+                <Chip
+                  icon={<WbSunnyIcon sx={{ fontSize: '14px !important', color: '#f59e0b' }} />}
+                  label={`${weather.temperature}°C`}
+                  size="small"
+                  sx={{
+                    fontWeight: 600,
+                    fontSize: '0.75rem',
+                    backgroundColor: isDark ? '#1e293b' : '#f8fafc',
+                    border: `1px solid ${border}`,
+                    color: textPrimary
+                  }}
+                />
+              )}
+
+              <Tooltip title="View in Full Screen Mode">
+                <IconButton
+                  size="small"
+                  onClick={handleOpenFullScreen}
+                  sx={{
+                    color: textSecondary,
+                    border: `1px solid ${border}`,
+                    borderRadius: '8px',
+                    p: 0.6,
+                    '&:hover': {
+                      color: isDark ? '#60a5fa' : '#2563eb',
+                      borderColor: isDark ? '#60a5fa' : '#2563eb'
+                    }
+                  }}
+                >
+                  <OpenInFullIcon sx={{ fontSize: 16 }} />
+                </IconButton>
+              </Tooltip>
+            </Box>
+          </Box>
+
+          {/* User Location Distance Badge (Kanpur / User IP) */}
+          {userCity && (
+            <Box
+              sx={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 0.8,
+                backgroundColor: isDark ? '#1e293b' : '#f8fafc',
+                border: `1px solid ${border}`,
+                borderRadius: '20px',
+                px: 1.2,
+                py: 0.35,
+                mb: 1.5
+              }}
+            >
+              <NearMeIcon sx={{ fontSize: 12, color: '#10b981' }} />
+              <Typography variant="caption" sx={{ color: textSecondary, fontWeight: 500 }}>
+                Searching from <b>{userCity}</b>
+              </Typography>
+            </Box>
+          )}
+
+          {/* Category Filter Chips for Quick Exploration */}
+          <CategoryFilter
+            selectedCategory={selectedCategory}
+            onSelectCategory={setSelectedCategory}
+            counts={categoryCounts}
+            detectedFromQuery={detectedCategory}
+            query={activeQuery}
+            isDark={isDark}
+          />
+
+          {/* Loading Spinner */}
+          {loading ? (
+            <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', py: 6, gap: 1.5 }}>
+              <CircularProgress size={32} sx={{ color: '#2563eb' }} />
+              <Typography variant="body2" sx={{ color: textSecondary, fontWeight: 500 }}>
+                Finding top sights in {activeCity}...
+              </Typography>
+            </Box>
+          ) : displayedPlaces.length === 0 ? (
+            <EmptyState
+              city={activeCity}
+              category={selectedCategory}
+              onResetCategory={() => setSelectedCategory('all')}
+              onRetry={() => fetchData(activeQuery)}
               isDark={isDark}
             />
-
-            {displayedPlaces.length === 0 ? (
-              <EmptyState
-                city={activeCity}
-                category={selectedCategory}
-                onResetCategory={() => setSelectedCategory('all')}
-                onRetry={() => fetchData(activeQuery)}
-                isDark={isDark}
-              />
-            ) : (
-              displayedPlaces.map((place, idx) => (
+          ) : (
+            /* Show ONLY Top 3 Sights on Quick Panel */
+            <Box>
+              {displayedPlaces.slice(0, 3).map((place, idx) => (
                 <AttractionCard
                   key={place.id || idx}
                   place={place}
                   index={idx}
                   isDark={isDark}
-                  isSidebar={false}
+                  isSidebar={true}
                   isSaved={!!savedPlaces[place.id]}
                   onToggleSave={handleToggleSave}
                   onSelectPlace={setSelectedPlaceForModal}
-                  onViewOnMap={(p) => setMapPinnedPlace(p)}
+                  onViewOnMap={() => handleOpenFullScreen()}
                 />
-              ))
-            )}
-          </Box>
+              ))}
 
-          {/* Right Column: Interactive Map & 1-Day Itinerary Planner */}
-          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2.5 }}>
-            <InteractiveMap
-              places={places}
-              center={activeCoords}
-              city={activeCity}
-              selectedPlace={mapPinnedPlace}
-              onSelectPlace={setSelectedPlaceForModal}
-              isDark={isDark}
-              isSidebar={false}
-            />
+              {/* Prominent "See More ➔" Action Banner */}
+              <Box
+                sx={{
+                  mt: 2,
+                  pt: 2,
+                  borderTop: `1px solid ${border}`,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: 1.2
+                }}
+              >
+                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <Typography variant="caption" sx={{ color: textSecondary, fontWeight: 600 }}>
+                    Showing 3 of {places.length} top sights in {activeCity}
+                  </Typography>
+                  <Typography variant="caption" sx={{ color: '#10b981', fontWeight: 600 }}>
+                    • Map & 1-Day Plan Ready
+                  </Typography>
+                </Box>
 
-            <DayPlanner
-              places={places}
-              city={activeCity}
-              isDark={isDark}
-              isSidebar={false}
-              onSelectPlace={setSelectedPlaceForModal}
-            />
-          </Box>
+                <Button
+                  fullWidth
+                  variant="contained"
+                  onClick={handleOpenFullScreen}
+                  endIcon={<ArrowForwardIcon />}
+                  sx={{
+                    py: 1.3,
+                    px: 2,
+                    borderRadius: '12px',
+                    fontWeight: 700,
+                    fontSize: '0.92rem',
+                    textTransform: 'none',
+                    letterSpacing: '0.01em',
+                    background: isDark
+                      ? 'linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%)'
+                      : 'linear-gradient(135deg, #e11d48 0%, #be123c 100%)',
+                    boxShadow: isDark
+                      ? '0 4px 14px 0 rgba(37, 99, 235, 0.4)'
+                      : '0 4px 14px 0 rgba(225, 29, 72, 0.35)',
+                    transition: 'all 0.2s ease-in-out',
+                    '&:hover': {
+                      transform: 'translateY(-1px)',
+                      boxShadow: isDark
+                        ? '0 6px 20px 0 rgba(37, 99, 235, 0.5)'
+                        : '0 6px 20px 0 rgba(225, 29, 72, 0.45)',
+                      background: isDark
+                        ? 'linear-gradient(135deg, #2563eb 0%, #1e40af 100%)'
+                        : 'linear-gradient(135deg, #be123c 0%, #9f1239 100%)'
+                    }
+                  }}
+                >
+                  See More ({places.length} Sights, Map & 1-Day Itinerary)
+                </Button>
+              </Box>
+            </Box>
+          )}
         </Box>
       )}
 
