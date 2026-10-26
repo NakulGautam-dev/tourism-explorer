@@ -1,6 +1,138 @@
 [
   {
     "component": "@hyperdart/tourismexplorer",
+    "query": "Paris tourist attractions",
+    "entities": [
+      {
+        "word": "Paris",
+        "collectionName": "CITIES",
+        "collectionType": "HD_LOCATION",
+        "entityInfo": {
+          "geo": {
+            "tz": "Europe/Paris",
+            "lat": 48.8566,
+            "city": "Paris",
+            "long": 2.3522,
+            "state": "Ile-de-France",
+            "country": "France",
+            "countryCode": "FR"
+          }
+        },
+        "entityType": "LOCATION",
+        "description": "Capital of France and global cultural hub",
+        "relevanceScore": 100
+      }
+    ],
+    "keyword": [
+      {
+        "word": "tourist attractions",
+        "description": ""
+      }
+    ],
+    "genericQuery": "HD_LOCATION__CITIES tourist attractions",
+    "userLocation": {
+      "position": {
+        "coords": {
+          "latitude": 26.4631,
+          "longitude": 80.3479
+        },
+        "city": "Kanpur",
+        "countryCode": "IN"
+      },
+      "source": "ip"
+    },
+    "suggestedPlace": "mainline"
+  },
+  {
+    "component": "@hyperdart/tourismexplorer",
+    "query": "what to see in Paris",
+    "entities": [
+      {
+        "word": "Paris",
+        "collectionName": "CITIES",
+        "collectionType": "HD_LOCATION",
+        "entityInfo": {
+          "geo": {
+            "tz": "Europe/Paris",
+            "lat": 48.8566,
+            "city": "Paris",
+            "long": 2.3522,
+            "state": "Ile-de-France",
+            "country": "France",
+            "countryCode": "FR"
+          }
+        },
+        "entityType": "LOCATION",
+        "description": "Capital of France and global cultural hub",
+        "relevanceScore": 100
+      }
+    ],
+    "keyword": [
+      {
+        "word": "what to see",
+        "description": ""
+      }
+    ],
+    "genericQuery": "what to see in HD_LOCATION__CITIES",
+    "userLocation": {
+      "position": {
+        "coords": {
+          "latitude": 26.4631,
+          "longitude": 80.3479
+        },
+        "city": "Kanpur",
+        "countryCode": "IN"
+      },
+      "source": "ip"
+    },
+    "suggestedPlace": "mainline"
+  },
+  {
+    "component": "@hyperdart/tourismexplorer",
+    "query": "castles in Edinburgh",
+    "entities": [
+      {
+        "word": "Edinburgh",
+        "collectionName": "CITIES",
+        "collectionType": "HD_LOCATION",
+        "entityInfo": {
+          "geo": {
+            "tz": "Europe/London",
+            "lat": 55.9533,
+            "city": "Edinburgh",
+            "long": -3.1883,
+            "state": "Scotland",
+            "country": "United Kingdom",
+            "countryCode": "GB"
+          }
+        },
+        "entityType": "LOCATION",
+        "description": "Historic capital of Scotland",
+        "relevanceScore": 100
+      }
+    ],
+    "keyword": [
+      {
+        "word": "castles",
+        "description": ""
+      }
+    ],
+    "genericQuery": "castles in HD_LOCATION__CITIES",
+    "userLocation": {
+      "position": {
+        "coords": {
+          "latitude": 26.4631,
+          "longitude": 80.3479
+        },
+        "city": "Kanpur",
+        "countryCode": "IN"
+      },
+      "source": "ip"
+    },
+    "suggestedPlace": "mainline"
+  },
+  {
+    "component": "@hyperdart/tourismexplorer",
     "query": "tourist attraction in banglore",
     "entities": [
       {

@@ -180,17 +180,39 @@ const CURATED_CITIES_DATA = {
 function extractLocationFromQuery(q = '') {
   const text = q.trim();
 
-  // Pattern: "in <place>", "near <place>", "around <place>", "visit <place>", "see <place>", "at <place>", "of <place>"
-  const match = text.match(/\b(?:in|near|around|visit|explore|see|at|of)\s+([a-zA-Z\s.-]+)/i);
+  // 1. "near me" / "nearby" queries -> user location handled by caller
+  if (/\b(?:near\s+me|around\s+here|nearby|in\s+my\s+area)\b/i.test(text)) {
+    return null;
+  }
+
+  // 2. Prepositions: in, near, around, at, of, across
+  let match = text.match(/\b(?:in|near|around|at|of|across)\s+([a-zA-Z\s.-]+)$/i) ||
+              text.match(/\b(?:in|near|around|at|of|across)\s+([a-zA-Z\s.-]+)/i);
   if (match && match[1]) {
     const raw = match[1].trim();
     const cleanKey = raw.toLowerCase();
     return CITY_ALIASES[cleanKey] || raw;
   }
 
-  // Strip generic travel phrases to find the core place name
+  // 3. Prepositions: to, for (when pointing to destination, e.g. "travel guide to Tokyo", "trip to London")
+  match = text.match(/\b(?:to|for)\s+([a-zA-Z\s.-]+)$/i);
+  if (match && match[1] && !/^(?:do|visit|see|explore|go)\b/i.test(match[1].trim())) {
+    const raw = match[1].trim();
+    const cleanKey = raw.toLowerCase();
+    return CITY_ALIASES[cleanKey] || raw;
+  }
+
+  // 4. Location at start: "Paris tourist attractions", "Jaipur forts", "Tokyo sights", "Rome landmarks"
+  const startMatch = text.match(/^([a-zA-Z\s.-]+?)\s+\b(?:tourist\s+attractions?|things\s+to\s+(?:do|see)|places\s+to\s+(?:visit|see)|landmarks|sights|points\s+of\s+interest|museums?|forts?|palaces?|castles?|monuments?|temples?|parks?|viewpoints?|sightseeing|travel\s+guide|itinerary|tourism)\b/i);
+  if (startMatch && startMatch[1]) {
+    const raw = startMatch[1].trim();
+    const cleanKey = raw.toLowerCase();
+    return CITY_ALIASES[cleanKey] || raw;
+  }
+
+  // 5. Strip generic travel phrases to find the core place name
   const stripped = text
-    .replace(/\b(best|top|famous|tourist|attractions?|things\s+to\s+do|places\s+to\s+visit|sights?|points?\s+of\s+interest|museums?|forts?|castles?|monuments?|temples?|parks?|viewpoints?)\b/gi, '')
+    .replace(/\b(best|top|famous|popular|must-see|tourist|attractions?|things\s+to\s+(?:do|see)|places\s+to\s+(?:visit|see|explore)|sights?|points?\s+of\s+interest|sightseeing|city\s+tour|day\s+trip|travel\s+guide|itinerary|what\s+to\s+(?:see|do|visit)|where\s+to\s+go|museums?|forts?|castles?|palaces?|monuments?|temples?|parks?|gardens?|viewpoints?)\b/gi, '')
     .trim();
 
   const cleanStripped = stripped.toLowerCase();
@@ -201,13 +223,13 @@ function extractLocationFromQuery(q = '') {
 function detectCategoryFromQuery(query = '') {
   const q = query.toLowerCase();
 
-  if (/\bmuseums?\b/.test(q)) return 'museums';
-  if (/\b(monuments?|statues?)\b/.test(q)) return 'monuments';
-  if (/\b(temples?|churches?|mosques?|cathedrals?|shrines?|places?\s+of\s+worship)\b/.test(q)) return 'temples';
+  if (/\b(museums?|art\s+galler(y|ies)|exhibitions?)\b/.test(q)) return 'museums';
+  if (/\b(monuments?|statues?|memorials?)\b/.test(q)) return 'monuments';
+  if (/\b(temples?|churches?|mosques?|cathedrals?|basilicas?|shrines?|places?\s+of\s+worship)\b/.test(q)) return 'temples';
   if (/\b(forts?|castles?|palaces?|citadels?)\b/.test(q)) return 'forts';
   if (/\b(viewpoints?|views?|scenic|skyline|lookouts?|observation\s+decks?)\b/.test(q)) return 'viewpoints';
-  if (/\b(parks?|gardens?|botanical|nature\s+reserves?)\b/.test(q)) return 'parks';
-  if (/\b(historic(al)?(\s+sites?)?|heritage|ruins?)\b/.test(q)) return 'historic';
+  if (/\b(parks?|gardens?|botanical|nature\s+reserves?|beaches?|waterfalls?|lakes?)\b/.test(q)) return 'parks';
+  if (/\b(historic(al)?(\s+sites?)?|heritage|ruins?|ancient)\b/.test(q)) return 'historic';
   if (/\b(landmarks?)\b/.test(q)) return 'landmarks';
 
   return 'all';
