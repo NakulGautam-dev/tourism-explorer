@@ -1,0 +1,65 @@
+{
+  "title": "Tourism & Attractions Resource",
+  "description": "Structured schema for tourist attractions, sights, landmarks, museums, and points of interest for natural-language travel queries.",
+  "componentScope": {
+    "supportedIntents": [
+      {
+        "intent": "tourism-search",
+        "description": "Queries requesting sights, attractions, things to do, landmarks, or specific categories of places to visit in a destination.",
+        "example": [
+          "Tourist attractions in NYC",
+          "Things to do in Paris",
+          "Landmarks in Rome",
+          "museums in Delhi",
+          "best places to visit in Kurukshetra",
+          "Sights near Tokyo"
+        ]
+      }
+    ]
+  },
+  "schema": {
+    "$defs": {
+      "categories": {
+        "type": "string",
+        "description": "Category of attractions: 'museums', 'monuments', 'temples', 'forts', 'viewpoints', 'parks', 'historic', 'sights'."
+      },
+      "subtypes": {
+        "type": "string",
+        "description": "Specific POI classification, e.g. 'Art Museum', 'Ancient Temple', 'Urban Park', 'Scenic Overlook'."
+      },
+      "attributes": {
+        "type": "string",
+        "description": "Tourist attributes: 'distance', 'weather', 'itinerary', 'opening_hours', 'coordinates'."
+      }
+    },
+    "type": "object",
+    "description": "Main query object for tourism discovery.",
+    "properties": {
+      "type": {
+        "type": "string",
+        "description": "Kind of request: 'list' for multiple attractions or 'detail' for specific spot."
+      },
+      "filters": {
+        "type": "object",
+        "description": "Filters to narrow down attractions by destination, category, or distance.",
+        "properties": {
+          "category": { "$ref": "#/$defs/categories" },
+          "subtype": { "$ref": "#/$defs/subtypes" },
+          "location": {
+            "type": "string",
+            "description": "City, district, or region."
+          }
+        },
+        "additionalProperties": true
+      },
+      "features": {
+        "type": "array",
+        "items": { "$ref": "#/$defs/attributes" }
+      },
+      "entities": {
+        "collections": ["HD_LOCATION", "CITIES", "DISTRICTS", "COUNTRIES"]
+      }
+    },
+    "required": ["type", "filters", "features", "entities"]
+  }
+}

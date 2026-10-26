@@ -1,0 +1,218 @@
+[
+  {
+    "component": "@hyperdart/tourismexplorer",
+    "query": "Tourist attractions in NYC",
+    "entities": [
+      {
+        "word": "NYC",
+        "collectionName": "CITIES",
+        "collectionType": "HD_LOCATION",
+        "entityInfo": {
+          "geo": {
+            "tz": "America/New_York",
+            "lat": 40.71427,
+            "city": "New York City",
+            "long": -74.00597,
+            "state": "New York",
+            "country": "United States",
+            "countryCode": "US"
+          }
+        },
+        "entityType": "LOCATION",
+        "description": "largest city in the United States",
+        "relevanceScore": 100
+      }
+    ],
+    "keyword": [{ "word": "tourist attractions", "description": "" }],
+    "genericQuery": "tourist attractions in HD_LOCATION__CITIES",
+    "userLocation": {
+      "position": {
+        "coords": { "latitude": 26.4631, "longitude": 80.3479 },
+        "city": "Kanpur",
+        "countryCode": "IN"
+      },
+      "source": "ip"
+    },
+    "suggestedPlace": "sidebar"
+  },
+  {
+    "component": "@hyperdart/tourismexplorer",
+    "query": "Things to do in Paris",
+    "entities": [
+      {
+        "word": "Paris",
+        "collectionName": "CITIES",
+        "collectionType": "HD_LOCATION",
+        "entityInfo": {
+          "geo": {
+            "tz": "Europe/Paris",
+            "lat": 48.8566,
+            "city": "Paris",
+            "long": 2.3522,
+            "state": "Île-de-France",
+            "country": "France",
+            "countryCode": "FR"
+          }
+        },
+        "entityType": "LOCATION",
+        "description": "Capital of France",
+        "relevanceScore": 100
+      }
+    ],
+    "keyword": [{ "word": "things to do", "description": "" }],
+    "genericQuery": "things to do in HD_LOCATION__CITIES",
+    "userLocation": {
+      "position": {
+        "coords": { "latitude": 26.4631, "longitude": 80.3479 },
+        "city": "Kanpur",
+        "countryCode": "IN"
+      },
+      "source": "ip"
+    },
+    "suggestedPlace": "mainline"
+  },
+  {
+    "component": "@hyperdart/tourismexplorer",
+    "query": "Landmarks in Rome",
+    "entities": [
+      {
+        "word": "Rome",
+        "collectionName": "CITIES",
+        "collectionType": "HD_LOCATION",
+        "entityInfo": {
+          "geo": {
+            "tz": "Europe/Rome",
+            "lat": 41.9028,
+            "city": "Rome",
+            "long": 12.4964,
+            "state": "Lazio",
+            "country": "Italy",
+            "countryCode": "IT"
+          }
+        },
+        "entityType": "LOCATION",
+        "description": "Capital of Italy",
+        "relevanceScore": 100
+      }
+    ],
+    "keyword": [{ "word": "landmarks", "description": "" }],
+    "genericQuery": "landmarks in HD_LOCATION__CITIES",
+    "userLocation": {
+      "position": {
+        "coords": { "latitude": 26.4631, "longitude": 80.3479 },
+        "city": "Kanpur",
+        "countryCode": "IN"
+      },
+      "source": "ip"
+    },
+    "suggestedPlace": "sidebar"
+  },
+  {
+    "component": "@hyperdart/tourismexplorer",
+    "query": "museums in Delhi",
+    "entities": [
+      {
+        "word": "Delhi",
+        "collectionName": "CITIES",
+        "collectionType": "HD_LOCATION",
+        "entityInfo": {
+          "geo": {
+            "tz": "Asia/Kolkata",
+            "lat": 28.6139,
+            "city": "Delhi",
+            "long": 77.209,
+            "state": "Delhi",
+            "country": "India",
+            "countryCode": "IN"
+          }
+        },
+        "entityType": "LOCATION",
+        "description": "Capital of India",
+        "relevanceScore": 100
+      }
+    ],
+    "keyword": [{ "word": "museums", "description": "" }],
+    "genericQuery": "museums in HD_LOCATION__CITIES",
+    "userLocation": {
+      "position": {
+        "coords": { "latitude": 26.4631, "longitude": 80.3479 },
+        "city": "Kanpur",
+        "countryCode": "IN"
+      },
+      "source": "ip"
+    },
+    "suggestedPlace": "mainline"
+  },
+  {
+    "component": "@hyperdart/tourismexplorer",
+    "query": "best places to visit in Kurukshetra",
+    "entities": [
+      {
+        "word": "Kurukshetra",
+        "collectionName": "CITIES",
+        "collectionType": "HD_LOCATION",
+        "entityInfo": {
+          "geo": {
+            "tz": "Asia/Kolkata",
+            "lat": 29.9695,
+            "city": "Kurukshetra",
+            "long": 76.8783,
+            "state": "Haryana",
+            "country": "India",
+            "countryCode": "IN"
+          }
+        },
+        "entityType": "LOCATION",
+        "description": "Historical city in Haryana",
+        "relevanceScore": 100
+      }
+    ],
+    "keyword": [{ "word": "places to visit", "description": "" }],
+    "genericQuery": "best places to visit in HD_LOCATION__CITIES",
+    "userLocation": {
+      "position": {
+        "coords": { "latitude": 26.4631, "longitude": 80.3479 },
+        "city": "Kanpur",
+        "countryCode": "IN"
+      },
+      "source": "ip"
+    },
+    "suggestedPlace": "sidebar"
+  },
+  {
+    "component": "@hyperdart/tourismexplorer",
+    "query": "Sights near Tokyo",
+    "entities": [
+      {
+        "word": "Tokyo",
+        "collectionName": "CITIES",
+        "collectionType": "HD_LOCATION",
+        "entityInfo": {
+          "geo": {
+            "tz": "Asia/Tokyo",
+            "lat": 35.6762,
+            "city": "Tokyo",
+            "long": 139.6503,
+            "state": "Tokyo",
+            "country": "Japan",
+            "countryCode": "JP"
+          }
+        },
+        "entityType": "LOCATION",
+        "description": "Capital of Japan",
+        "relevanceScore": 100
+      }
+    ],
+    "keyword": [{ "word": "sights", "description": "" }],
+    "genericQuery": "sights near HD_LOCATION__CITIES",
+    "userLocation": {
+      "position": {
+        "coords": { "latitude": 26.4631, "longitude": 80.3479 },
+        "city": "Kanpur",
+        "countryCode": "IN"
+      },
+      "source": "ip"
+    },
+    "suggestedPlace": "mainline"
+  }
+]
