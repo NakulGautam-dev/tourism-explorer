@@ -17,6 +17,12 @@ stats.html
 .env.development.local
 .env.test.local
 .env.production.local
+.dev.vars
+.dev.vars.local
+**/.env
+**/.dev.vars
+src/backend/.dev.vars
+src/backend/.env
 
 # Logs
 npm-debug.log*

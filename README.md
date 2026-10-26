@@ -87,6 +87,7 @@ When travelers plan trips, they search broad questions like *"things to do in Pa
 - **Frontend:** React 19 / 18, Vite 6, `@hyperdart/frontend` (`withHD`), `@hyperdart/sandbox`, `@mui/material`, `@mui/icons-material`, `@emotion/react`, `@emotion/styled`.
 - **Backend:** Express 5, Cloudflare Workers runtime via `@cloudflare/workers-types` and `wrangler`, `cors`, `body-parser`.
 - **Build & Packaging:** `vite build` (ES library mode), `wrangler build`, `validate-publish.js`.
+- **Repository:** [https://github.com/NakulGautam-dev/tourism-explorer](https://github.com/NakulGautam-dev/tourism-explorer)
 
 ---
 

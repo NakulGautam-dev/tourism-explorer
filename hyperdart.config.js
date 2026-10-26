@@ -78,6 +78,6 @@ export default {
 		title: 'Tourism Explorer',
 		description: 'Smart travel companion for hyperDart search queries that reveals top sights, categorized POIs, daily itineraries, visit weather, and interactive maps.'
 	},
-	github: "https://github.com/hyperdart-hackathon/tourism-explorer",
+	github: "https://github.com/NakulGautam-dev/tourism-explorer",
 	demovideo: "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
 }
