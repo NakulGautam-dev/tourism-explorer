@@ -32,6 +32,7 @@ import PlaceDetailModal from './components/PlaceDetailModal';
 import EmptyState from './components/EmptyState';
 
 const QUICK_DISCOVERY_TAGS = [
+  'tourist attraction in banglore',
   'forts in jaipur',
   'Tourist attractions in NYC',
   'Things to do in Paris',
