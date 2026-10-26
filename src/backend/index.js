@@ -194,16 +194,26 @@ async function fetchWikipediaAttractions(query, city, category, lat, lon) {
 
     if (searchRes.ok) {
       const searchData = await searchRes.json();
+      const badWords = [
+        'timeline of',
+        'history of',
+        'geography of',
+        'demographics of',
+        'economy of',
+        'transport in',
+        'politics of',
+        'climate of',
+        'list of',
+        'disambiguation',
+        'outline of',
+        'tourism in',
+        'culture of'
+      ];
+
       const hits = (searchData.query?.search || []).filter((h) => {
         const t = h.title.toLowerCase();
-        return (
-          !t.startsWith('list of') &&
-          !t.includes('disambiguation') &&
-          !t.includes('history of') &&
-          !t.includes('geography of') &&
-          !t.includes('demographics of') &&
-          t !== city.toLowerCase()
-        );
+        if (t === city.toLowerCase()) return false;
+        return !badWords.some((w) => t.includes(w));
       });
 
       const details = await Promise.all(
