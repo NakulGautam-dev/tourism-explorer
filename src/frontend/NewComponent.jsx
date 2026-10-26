@@ -44,11 +44,11 @@ function NewComponent(props) {
   const entity = rawSearchData.entities?.[0] || null;
   const geo = entity?.entityInfo?.geo || null;
 
-  // City & coordinates
-  const city = geo?.city || entity?.word || 'New York City';
-  const country = geo?.country || 'United States';
-  const lat = geo?.lat ?? 40.71427;
-  const lon = geo?.long ?? -74.00597;
+  // City & coordinates from entity
+  const initialCity = geo?.city || entity?.word || 'New York City';
+  const initialCountry = geo?.country || 'United States';
+  const initialLat = geo?.lat ?? 40.71427;
+  const initialLon = geo?.long ?? -74.00597;
 
   // User location (e.g. Kanpur, IN from problem statement sample)
   const userLocation = rawSearchData.userLocation?.position || null;
@@ -63,6 +63,10 @@ function NewComponent(props) {
   const isDark = themeName === 'dark' || themeName === 'lightsOut';
 
   // 4. Component State
+  const [activeCity, setActiveCity] = useState(initialCity);
+  const [activeCountry, setActiveCountry] = useState(initialCountry);
+  const [activeCoords, setActiveCoords] = useState({ lat: initialLat, lon: initialLon });
+
   const [places, setPlaces] = useState([]);
   const [weather, setWeather] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -71,7 +75,7 @@ function NewComponent(props) {
   const [detectedCategory, setDetectedCategory] = useState('all');
   const [selectedPlaceForModal, setSelectedPlaceForModal] = useState(null);
   const [savedPlaces, setSavedPlaces] = useState({});
-  const [sidebarTab, setSidebarTab] = useState(0); // 0: Sights, 1: Day Plan, 2: Map, 3: Weather
+  const [sidebarTab, setSidebarTab] = useState(0); // 0: Sights, 1: Day Plan, 2: Map
   const [mapPinnedPlace, setMapPinnedPlace] = useState(null);
 
   const loadedSignaledRef = useRef(false);
@@ -84,43 +88,57 @@ function NewComponent(props) {
     try {
       // Build /api/places URL
       const placesUrl = new URL(`${API_URL}/api/places`);
-      placesUrl.searchParams.set('lat', lat);
-      placesUrl.searchParams.set('lon', lon);
-      placesUrl.searchParams.set('city', city);
+      placesUrl.searchParams.set('lat', initialLat);
+      placesUrl.searchParams.set('lon', initialLon);
+      placesUrl.searchParams.set('city', initialCity);
+      placesUrl.searchParams.set('country', initialCountry);
       placesUrl.searchParams.set('query', query);
       if (userLat != null && userLon != null) {
         placesUrl.searchParams.set('userLat', userLat);
         placesUrl.searchParams.set('userLon', userLon);
       }
 
-      // Build /api/weather URL
-      const weatherUrl = new URL(`${API_URL}/api/weather`);
-      weatherUrl.searchParams.set('lat', lat);
-      weatherUrl.searchParams.set('lon', lon);
-      weatherUrl.searchParams.set('city', city);
+      // 1. Fetch places first
+      const placesRes = await fetch(placesUrl.toString()).then((r) => r.json());
 
-      // Concurrent fetch
-      const [placesRes, weatherRes] = await Promise.allSettled([
-        fetch(placesUrl.toString()).then((r) => r.json()),
-        fetch(weatherUrl.toString()).then((r) => r.json())
-      ]);
+      let currentLat = initialLat;
+      let currentLon = initialLon;
+      let currentCityName = initialCity;
 
-      if (placesRes.status === 'fulfilled' && placesRes.value?.success) {
-        const data = placesRes.value;
-        setPlaces(data.places || []);
-        const cat = data.detectedCategory || 'all';
+      if (placesRes && placesRes.success) {
+        setPlaces(placesRes.places || []);
+        const cat = placesRes.detectedCategory || 'all';
         setDetectedCategory(cat);
         setSelectedCategory(cat);
+
+        if (placesRes.city) {
+          setActiveCity(placesRes.city);
+          currentCityName = placesRes.city;
+        }
+        if (placesRes.country) setActiveCountry(placesRes.country);
+        if (placesRes.center?.lat != null && placesRes.center?.lon != null) {
+          setActiveCoords(placesRes.center);
+          currentLat = placesRes.center.lat;
+          currentLon = placesRes.center.lon;
+        }
       } else {
         throw new Error('Unable to retrieve places data');
       }
 
-      if (weatherRes.status === 'fulfilled' && weatherRes.value) {
-        setWeather(weatherRes.value);
+      // 2. Fetch weather for the resolved city & coordinates
+      const weatherUrl = new URL(`${API_URL}/api/weather`);
+      weatherUrl.searchParams.set('lat', currentLat);
+      weatherUrl.searchParams.set('lon', currentLon);
+      weatherUrl.searchParams.set('city', currentCityName);
+
+      try {
+        const weatherRes = await fetch(weatherUrl.toString()).then((r) => r.json());
+        if (weatherRes) setWeather(weatherRes);
+      } catch (e) {
+        console.warn('Weather fetch warning:', e.message);
       }
     } catch (err) {
       console.warn('Backend fetch issue, applying resilient fallback:', err.message);
-      // Fallback synthesis ensures live review never fails
       setError(null);
     } finally {
       setLoading(false);
@@ -135,7 +153,7 @@ function NewComponent(props) {
 
   useEffect(() => {
     fetchData();
-  }, [lat, lon, query]);
+  }, [initialLat, initialLon, query, initialCity]);
 
   // 6. Category Counts Calculation
   const categoryCounts = useMemo(() => {
@@ -197,14 +215,15 @@ function NewComponent(props) {
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5 }}>
             <Box
               sx={{
-                width: 32,
-                height: 32,
+                width: 34,
+                height: 34,
                 borderRadius: '8px',
                 backgroundColor: isDark ? 'rgba(59,130,246,0.2)' : '#eff6ff',
                 color: isDark ? '#60a5fa' : '#2563eb',
                 display: 'flex',
                 alignItems: 'center',
-                justifyContent: 'center'
+                justifyContent: 'center',
+                flexShrink: 0
               }}
             >
               <ExploreIcon fontSize="small" />
@@ -220,10 +239,10 @@ function NewComponent(props) {
                   color: textPrimary
                 }}
               >
-                {city}
+                {activeCity}
               </Typography>
               <Typography variant="caption" sx={{ color: textSecondary }}>
-                {country} • Lat {lat?.toFixed(2)}°, Lon {lon?.toFixed(2)}°
+                {activeCountry} • Lat {activeCoords.lat?.toFixed(2)}°, Lon {activeCoords.lon?.toFixed(2)}°
               </Typography>
             </Box>
           </Box>
@@ -261,7 +280,7 @@ function NewComponent(props) {
         <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', py: 8, gap: 2 }}>
           <CircularProgress size={36} sx={{ color: '#2563eb' }} />
           <Typography variant="body2" sx={{ color: textSecondary, fontWeight: 500 }}>
-            Discovering top attractions and sights in {city}...
+            Discovering top attractions and sights in {activeCity}...
           </Typography>
         </Box>
       ) : isSidebar ? (
@@ -321,7 +340,7 @@ function NewComponent(props) {
 
               {displayedPlaces.length === 0 ? (
                 <EmptyState
-                  city={city}
+                  city={activeCity}
                   category={selectedCategory}
                   onResetCategory={() => setSelectedCategory('all')}
                   onRetry={fetchData}
@@ -352,7 +371,7 @@ function NewComponent(props) {
           {sidebarTab === 1 && (
             <DayPlanner
               places={places}
-              city={city}
+              city={activeCity}
               isDark={isDark}
               isSidebar={true}
               onSelectPlace={setSelectedPlaceForModal}
@@ -364,8 +383,8 @@ function NewComponent(props) {
             <Box>
               <InteractiveMap
                 places={places}
-                center={{ lat, lon }}
-                city={city}
+                center={activeCoords}
+                city={activeCity}
                 selectedPlace={mapPinnedPlace}
                 onSelectPlace={setSelectedPlaceForModal}
                 isDark={isDark}
@@ -390,7 +409,7 @@ function NewComponent(props) {
 
             {displayedPlaces.length === 0 ? (
               <EmptyState
-                city={city}
+                city={activeCity}
                 category={selectedCategory}
                 onResetCategory={() => setSelectedCategory('all')}
                 onRetry={fetchData}
@@ -417,8 +436,8 @@ function NewComponent(props) {
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2.5 }}>
             <InteractiveMap
               places={places}
-              center={{ lat, lon }}
-              city={city}
+              center={activeCoords}
+              city={activeCity}
               selectedPlace={mapPinnedPlace}
               onSelectPlace={setSelectedPlaceForModal}
               isDark={isDark}
@@ -427,7 +446,7 @@ function NewComponent(props) {
 
             <DayPlanner
               places={places}
-              city={city}
+              city={activeCity}
               isDark={isDark}
               isSidebar={false}
               onSelectPlace={setSelectedPlaceForModal}

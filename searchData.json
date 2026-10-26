@@ -1,6 +1,50 @@
 [
   {
     "component": "@hyperdart/tourismexplorer",
+    "query": "forts in jaipur",
+    "entities": [
+      {
+        "word": "Jaipur",
+        "collectionName": "CITIES",
+        "collectionType": "HD_LOCATION",
+        "entityInfo": {
+          "geo": {
+            "tz": "Asia/Kolkata",
+            "lat": 26.9124,
+            "city": "Jaipur",
+            "long": 75.7873,
+            "state": "Rajasthan",
+            "country": "India",
+            "countryCode": "IN"
+          }
+        },
+        "entityType": "LOCATION",
+        "description": "Pink City and capital of Rajasthan, India",
+        "relevanceScore": 100
+      }
+    ],
+    "keyword": [
+      {
+        "word": "forts",
+        "description": ""
+      }
+    ],
+    "genericQuery": "forts in HD_LOCATION__CITIES",
+    "userLocation": {
+      "position": {
+        "coords": {
+          "latitude": 26.4631,
+          "longitude": 80.3479
+        },
+        "city": "Kanpur",
+        "countryCode": "IN"
+      },
+      "source": "ip"
+    },
+    "suggestedPlace": "mainline"
+  },
+  {
+    "component": "@hyperdart/tourismexplorer",
     "query": "Tourist attractions in NYC",
     "entities": [
       {
@@ -23,11 +67,19 @@
         "relevanceScore": 100
       }
     ],
-    "keyword": [{ "word": "tourist attractions", "description": "" }],
+    "keyword": [
+      {
+        "word": "tourist attractions",
+        "description": ""
+      }
+    ],
     "genericQuery": "tourist attractions in HD_LOCATION__CITIES",
     "userLocation": {
       "position": {
-        "coords": { "latitude": 26.4631, "longitude": 80.3479 },
+        "coords": {
+          "latitude": 26.4631,
+          "longitude": 80.3479
+        },
         "city": "Kanpur",
         "countryCode": "IN"
       },
@@ -59,11 +111,19 @@
         "relevanceScore": 100
       }
     ],
-    "keyword": [{ "word": "things to do", "description": "" }],
+    "keyword": [
+      {
+        "word": "things to do",
+        "description": ""
+      }
+    ],
     "genericQuery": "things to do in HD_LOCATION__CITIES",
     "userLocation": {
       "position": {
-        "coords": { "latitude": 26.4631, "longitude": 80.3479 },
+        "coords": {
+          "latitude": 26.4631,
+          "longitude": 80.3479
+        },
         "city": "Kanpur",
         "countryCode": "IN"
       },
@@ -95,11 +155,19 @@
         "relevanceScore": 100
       }
     ],
-    "keyword": [{ "word": "landmarks", "description": "" }],
+    "keyword": [
+      {
+        "word": "landmarks",
+        "description": ""
+      }
+    ],
     "genericQuery": "landmarks in HD_LOCATION__CITIES",
     "userLocation": {
       "position": {
-        "coords": { "latitude": 26.4631, "longitude": 80.3479 },
+        "coords": {
+          "latitude": 26.4631,
+          "longitude": 80.3479
+        },
         "city": "Kanpur",
         "countryCode": "IN"
       },
@@ -131,11 +199,19 @@
         "relevanceScore": 100
       }
     ],
-    "keyword": [{ "word": "museums", "description": "" }],
+    "keyword": [
+      {
+        "word": "museums",
+        "description": ""
+      }
+    ],
     "genericQuery": "museums in HD_LOCATION__CITIES",
     "userLocation": {
       "position": {
-        "coords": { "latitude": 26.4631, "longitude": 80.3479 },
+        "coords": {
+          "latitude": 26.4631,
+          "longitude": 80.3479
+        },
         "city": "Kanpur",
         "countryCode": "IN"
       },
@@ -167,11 +243,19 @@
         "relevanceScore": 100
       }
     ],
-    "keyword": [{ "word": "places to visit", "description": "" }],
+    "keyword": [
+      {
+        "word": "places to visit",
+        "description": ""
+      }
+    ],
     "genericQuery": "best places to visit in HD_LOCATION__CITIES",
     "userLocation": {
       "position": {
-        "coords": { "latitude": 26.4631, "longitude": 80.3479 },
+        "coords": {
+          "latitude": 26.4631,
+          "longitude": 80.3479
+        },
         "city": "Kanpur",
         "countryCode": "IN"
       },
@@ -203,11 +287,19 @@
         "relevanceScore": 100
       }
     ],
-    "keyword": [{ "word": "sights", "description": "" }],
+    "keyword": [
+      {
+        "word": "sights",
+        "description": ""
+      }
+    ],
     "genericQuery": "sights near HD_LOCATION__CITIES",
     "userLocation": {
       "position": {
-        "coords": { "latitude": 26.4631, "longitude": 80.3479 },
+        "coords": {
+          "latitude": 26.4631,
+          "longitude": 80.3479
+        },
         "city": "Kanpur",
         "countryCode": "IN"
       },
